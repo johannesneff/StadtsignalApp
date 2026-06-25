@@ -731,7 +731,8 @@
   ];
   let currentScreen = "scanner";
 
-  function go(name) {
+  function go(name, fromHash) {
+    if (!SCREENS.some((s) => s.id === name)) name = "scanner";
     currentScreen = name;
     SCREENS.forEach((s) => {
       const el = document.getElementById("screen-" + s.id);
@@ -740,6 +741,7 @@
     document.querySelectorAll("#tabbar button").forEach((b) => {
       b.setAttribute("aria-current", b.dataset.screen === name ? "page" : "false");
     });
+    if (!fromHash && location.hash.slice(1) !== name) location.hash = name;
     if (name === "karte") setTimeout(initMap, 40);
     window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
   }
@@ -766,7 +768,8 @@
       s.render();
     });
     buildTabbar();
-    go("scanner");
+    go(location.hash.slice(1) || "scanner", true);
+    window.addEventListener("hashchange", () => go(location.hash.slice(1) || "scanner", true));
 
     // Popup-Buttons (Karte) per Delegation
     document.addEventListener("click", (e) => {
