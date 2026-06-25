@@ -36,6 +36,7 @@ ANTWORTE IMMER AUF DEUTSCH und IMMER GENAU IN DIESEM FORMAT:
 (0–3 ZUSÄTZLICHE, noch nicht beendete IT-/Tech-Events in Würzburg/Mainfranken, die NICHT im EVENT-POOL stehen – per Websuche aus Quellen wie ZDI Mainfranken, THWS, Uni Würzburg, IHK, Stadt Würzburg, Gründerzentren, Eventbrite. Immer mit echtem Link. Liefert die Suche nichts Verlässliches, diesen Abschnitt KOMPLETT weglassen.)
 
 Regeln:
+- Gewichte die AKTIVEN INTERESSEN und die HISTORIE (bereits besuchte Themen) STARK: Events, die dazu passen, bekommen höhere Match-Scores und stehen oben. Ohne aktive Interessen breit empfehlen.
 - „📍 Treffer": ausschließlich Events aus dem EVENT-POOL mit deren EXAKTER id.
 - „🌐 Weitere Funde": nur per Websuche verifizierte, reale Events mit Link; KEINE id; nichts erfinden.
 - Berücksichtige den ANGEGEBENEN AKTUELLEN ZEITPUNKT: Schlage KEINE bereits beendeten Events vor; laufende/kommende sind erlaubt; bevorzuge zeitlich passende Treffer („heute", „heute Abend", „diese Woche").
