@@ -229,6 +229,10 @@ async function runScannerSearch(query, thinkingEl, resultsEl, goBtn) {
   steps.forEach((s, idx) => thinkingEl.appendChild(
     h("div", { class: "think-step", style: { animationDelay: (reduced ? 0 : idx * 0.4) + "s" } }, h("span", { class: "tick" }, "✓"), s)));
 
+  // Bei jeder Anfrage zuerst aktuelle Events abrufen (cache-gestützt),
+  // damit der Agent genau diese in die Vorschläge einbezieht.
+  await fetchEvents(false);
+
   // Echten Agenten versuchen; bei Fehler/ohne Key -> lokaler Fallback.
   let realText = null;
   try {
@@ -701,7 +705,9 @@ function buildTabbar() {
 // Echte Events vom Ingestion-Endpunkt laden; ersetzt den Seed in-place.
 // Fällt still auf den kuratierten Seed zurück (offline / file:// / kein Server).
 let lastEventsFetch = 0;
-async function loadLiveEvents(force) {
+// Holt aktuelle Events vom Ingestion-Endpunkt und ersetzt den Seed in-place.
+// Rendert NICHT neu (für den Aufruf mitten in einer laufenden Scanner-Suche).
+async function fetchEvents(force) {
   try {
     const r = await fetch("/api/events" + (force ? "?refresh=1" : ""));
     if (!r.ok) return false;
@@ -710,14 +716,21 @@ async function loadLiveEvents(force) {
     EVENTS.length = 0;
     for (const e of d.events) EVENTS.push(e);
     lastEventsFetch = Date.now();
-    renderScanner();
-    renderEinstellungen();
-    if (currentScreen === "uebersicht") renderUebersicht();
-    console.info(`Stadtsignal: ${EVENTS.length} echte Events ${d.cached ? "(Cache)" : "(frisch abgefragt)"} – ${d.fetchedAt}.`);
     return true;
   } catch (e) {
     return false; /* Seed bleibt aktiv */
   }
+}
+// Wie fetchEvents, aber mit Re-Render (Boot + Refresh-Button).
+async function loadLiveEvents(force) {
+  const ok = await fetchEvents(force);
+  if (ok) {
+    renderScanner();
+    renderEinstellungen();
+    if (currentScreen === "uebersicht") renderUebersicht();
+    console.info(`Stadtsignal: ${EVENTS.length} echte Events aktualisiert.`);
+  }
+  return ok;
 }
 
 function init() {
