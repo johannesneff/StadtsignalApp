@@ -80,10 +80,20 @@ function scoreInput() {
 function isVisited(id) { return state.history.includes(id); }
 function toggleVisited(id) {
   const i = state.history.indexOf(id);
-  if (i >= 0) state.history.splice(i, 1); else state.history.push(id);
+  if (i >= 0) {
+    // Entfernen: existiert eine Notiz, erst separat bestätigen (kein automatisches Löschen).
+    const note = (state.notes[id] || "").trim();
+    if (note && !window.confirm("Zu diesem Event existiert eine Notiz.\n\nEvent wirklich aus „Besucht\" entfernen? Die zugehörige Notiz wird dabei gelöscht.")) {
+      return;
+    }
+    if (note) delete state.notes[id];
+    state.history.splice(i, 1);
+  } else {
+    state.history.push(id);
+  }
   save();
   renderEinstellungen(); renderScanner();
-  if (currentScreen === "uebersicht") { renderUebersicht(); }
+  if (currentScreen === "uebersicht") renderUebersicht();
 }
 
 /* ---------------------- Icons ---------------------- */
@@ -432,7 +442,7 @@ function popupHtml(ev) {
     <div class="popup-meta">${esc(ev.location)}</div>
     <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn" style="padding:7px 14px;min-height:34px;font-size:13px" data-visit="${ev.id}">${visited ? "✓ Besucht" : "Merken"}</button>
-      <a class="btn" style="padding:7px 14px;min-height:34px;font-size:13px" href="${esc(ev.url)}" target="_blank" rel="noopener">Eventseite</a>
+      <a class="btn" style="padding:7px 14px;min-height:34px;font-size:13px" href="${esc(ev.url)}" target="_blank" rel="noopener">Zur Eventseite</a>
     </div></div>`;
 }
 function goToMap(id) {
@@ -493,7 +503,12 @@ function fmtSelectedDay(date) { return `${WD[date.getDay()]} ${pad(date.getDate(
 function eventRowWithVisit(ev) {
   return h("div", { class: "event-row", style: { gridTemplateColumns: "56px 1fr auto" } },
     h("div", { class: "event-date" }, h("div", { class: "d tnum" }, fmtTime(ev.startsAt).slice(0, 5)), h("div", { class: "m" }, ev.source)),
-    h("div", { class: "event-main" }, h("div", { class: "t" }, ev.title), h("div", { class: "meta" }, categoryTag(ev.category), h("span", {}, "· " + ev.location))),
+    h("div", { class: "event-main" },
+      h("div", { class: "t" }, ev.title),
+      h("div", { class: "meta" }, categoryTag(ev.category), h("span", {}, "· " + ev.location)),
+      h("div", { class: "reco-actions" },
+        h("button", { class: "reco-link", onclick: () => goToMap(ev.id) }, "Auf der Karte"),
+        h("a", { class: "reco-link", href: ev.url, target: "_blank", rel: "noopener" }, "Zur Eventseite →"))),
     h("button", { class: "chip", onclick: () => toggleVisited(ev.id) }, isVisited(ev.id) ? "✓" : "Merken"));
 }
 
@@ -577,7 +592,13 @@ function buildHistorie() {
     if (!visited.length) card.appendChild(h("div", { class: "empty-state" }, "Noch keine Events besucht. Markiere Events im Kalender oder auf der Karte."));
     else card.appendChild(h("div", { class: "event-list" }, visited.map((ev) => h("div", { class: "event-row" },
       h("div", { class: "event-date" }, h("div", { class: "d tnum" }, String(new Date(ev.startsAt).getDate())), h("div", { class: "m" }, MONTHS_SHORT[new Date(ev.startsAt).getMonth()])),
-      h("div", { class: "event-main" }, h("div", { class: "t" }, ev.title), h("div", { class: "meta" }, categoryTag(ev.category), h("span", {}, "· " + ev.location))),
+      h("div", { class: "event-main" },
+        h("div", { class: "t" }, ev.title),
+        h("div", { class: "meta" }, categoryTag(ev.category), h("span", {}, "· " + ev.location),
+          state.notes[ev.id] && state.notes[ev.id].trim() ? h("span", { style: { color: "var(--accent)", fontWeight: "600" } }, "· 📝 Notiz") : null),
+        h("div", { class: "reco-actions" },
+          h("button", { class: "reco-link", onclick: () => goToMap(ev.id) }, "Auf der Karte"),
+          h("a", { class: "reco-link", href: ev.url, target: "_blank", rel: "noopener" }, "Zur Eventseite →"))),
       h("button", { class: "chip", onclick: () => toggleVisited(ev.id) }, "Entfernen")))));
   } else {
     if (!visited.length) card.appendChild(h("div", { class: "empty-state" }, "Markiere zuerst Events als besucht, dann kannst du hier Notizen hinterlegen."));
