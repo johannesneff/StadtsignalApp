@@ -37,6 +37,7 @@ ANTWORTE IMMER AUF DEUTSCH und IMMER GENAU IN DIESEM FORMAT:
 
 Regeln:
 - Gewichte die AKTIVEN INTERESSEN und die HISTORIE (bereits besuchte Themen) STARK: Events, die dazu passen, bekommen höhere Match-Scores und stehen oben. Ohne aktive Interessen breit empfehlen.
+- Beachte die PRÄFERENZEN: „Modus" (Online/Vor Ort) als harte Vorgabe; „Tage", „Tageszeit", „Level" und „Format" als starke Präferenz; richte die Auswahl zusätzlich am „Fokus/Ziele"-Text aus.
 - „📍 Treffer": ausschließlich Events aus dem EVENT-POOL mit deren EXAKTER id.
 - „🌐 Weitere Funde": nur per Websuche verifizierte, reale Events mit Link; KEINE id; nichts erfinden.
 - Berücksichtige den ANGEGEBENEN AKTUELLEN ZEITPUNKT: Schlage KEINE bereits beendeten Events vor; laufende/kommende sind erlaubt; bevorzuge zeitlich passende Treffer („heute", „heute Abend", „diese Woche").
@@ -87,10 +88,21 @@ export default async function handler(req, res) {
   if (!events.length) { res.status(400).json({ error: "Kein Event-Pool übergeben" }); return; }
 
   const nowIso = (body.now && typeof body.now === "string") ? body.now : new Date().toISOString();
+  const prefs = body.prefs && typeof body.prefs === "object" ? body.prefs : {};
+  const prefBits = [];
+  if (prefs.mode) prefBits.push(`Modus: ${prefs.mode}`);
+  if (prefs.days) prefBits.push(`Tage: ${prefs.days}`);
+  if (prefs.daytime) prefBits.push(`Tageszeit: ${prefs.daytime}`);
+  if (prefs.level) prefBits.push(`Level: ${prefs.level}`);
+  if (Array.isArray(prefs.formats) && prefs.formats.length) prefBits.push(`Format: ${prefs.formats.join(", ")}`);
+  if (prefs.area) prefBits.push(`Bevorzugter Ort: ${prefs.area}`);
+
   const systemText = `${FORMAT}\n\nEVENT-POOL:\n${buildEventPool(events)}`;
   const userMessage =
     `Aktueller Zeitpunkt: ${fmtDe(nowIso)} (Europe/Berlin).\n` +
     `Aktive Interessen: ${interestLabels.join(", ") || "(keine)"}.\n` +
+    (prefBits.length ? `Präferenzen: ${prefBits.join(" · ")}.\n` : "") +
+    (prefs.focus ? `Aktueller Fokus/Ziele: ${prefs.focus}\n` : "") +
     `Besuchte Event-IDs: ${history.length ? history.join(", ") : "(keine)"}.\n\n` +
     `Frage: ${query}`;
 

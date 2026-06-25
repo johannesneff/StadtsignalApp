@@ -20,13 +20,19 @@ const defaultState = {
   email: "",
   rhythm: "weekly",
   locationHints: false,
+  // Lokale Präferenzen (fließen in den Agenten ein, kein Datenschutzrisiko)
+  prefs: { days: "any", daytime: "any", mode: "any", level: "any", formats: [], focus: "", area: "" },
 };
 function loadState() {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (raw) return Object.assign({}, defaultState, JSON.parse(raw));
+    if (raw) {
+      const s = Object.assign({}, defaultState, JSON.parse(raw));
+      s.prefs = Object.assign({}, defaultState.prefs, s.prefs || {}); // alte States migrieren
+      return s;
+    }
   } catch (e) { /* ignore */ }
-  return Object.assign({}, defaultState);
+  return Object.assign({}, defaultState, { prefs: Object.assign({}, defaultState.prefs) });
 }
 const state = loadState();
 function save() {
@@ -259,6 +265,7 @@ async function runScannerSearch(query, thinkingEl, resultsEl, goBtn) {
         query,
         now: new Date().toISOString(),
         interestLabels: state.interests.map((i) => (INTEREST_BY_ID[i] || {}).label || i),
+        prefs: prefsForAgent(),
         history: state.history,
         events: activeEvents().map((e) => ({ id: e.id, title: e.title, category: e.category, tags: e.tags, startsAt: e.startsAt, endsAt: e.endsAt || null, location: e.location, description: e.description })),
       }),
@@ -529,7 +536,7 @@ function renderEinstellungen() {
   const root = $("#screen-einstellungen");
   if (!root) return;
   clear(root);
-  root.appendChild(header("Einstellungen", "Interessen, Newsletter & Historie"));
+  root.appendChild(header("Einstellungen", "Interessen, Präferenzen, Newsletter & Historie"));
   const body = h("div", { class: "screen-body" });
 
   // Profil
@@ -581,9 +588,71 @@ function renderEinstellungen() {
       h("button", { class: "btn primary", onclick: sendNewsletter }, h("span", { html: I.send }), "An mich senden")),
     h("div", { class: "muted small", style: { marginTop: "10px" } }, "Öffnet deine Mail-App mit fertigem Entwurf.")));
 
+  // Präferenzen (lokal, fließen in den Agenten ein)
+  body.appendChild(buildPrefs());
+
   // Historie (Besucht / Notizen)
   body.appendChild(buildHistorie());
   root.appendChild(body);
+}
+
+function prefField(label, control) {
+  return h("div", { class: "field", style: { marginBottom: "16px" } }, h("label", {}, label), control);
+}
+function segChoice(value, options, onPick) {
+  return h("div", { class: "segmented", style: { display: "flex", width: "100%" } },
+    options.map(([v, l]) => h("button", {
+      "aria-pressed": value === v ? "true" : "false",
+      style: { flex: "1 1 0", fontSize: "13px", padding: "9px 6px" },
+      onclick: () => onPick(v),
+    }, l)));
+}
+function buildPrefs() {
+  const p = state.prefs;
+  const set = (k, v) => { p[k] = v; save(); renderEinstellungen(); };
+  const card = h("div", { class: "card" }, h("h2", { class: "section-title", style: { marginBottom: "14px" } }, "Präferenzen"));
+
+  card.appendChild(prefField("TAGE", segChoice(p.days, [["any", "Egal"], ["weekday", "Werktags"], ["weekend", "Wochenende"]], (v) => set("days", v))));
+  card.appendChild(prefField("TAGESZEIT", segChoice(p.daytime, [["any", "Egal"], ["morning", "Vormittags"], ["afternoon", "Nachmittags"], ["evening", "Abends"]], (v) => set("daytime", v))));
+  card.appendChild(prefField("MODUS", segChoice(p.mode, [["any", "Egal"], ["online", "Online"], ["inperson", "Vor Ort"]], (v) => set("mode", v))));
+  card.appendChild(prefField("LEVEL", segChoice(p.level, [["any", "Egal"], ["beginner", "Einsteiger"], ["advanced", "Fortgeschritten"]], (v) => set("level", v))));
+
+  const FORMATS = [["workshop", "Workshop"], ["talk", "Talk"], ["networking", "Networking"], ["conference", "Konferenz"]];
+  const fmtRow = h("div", { class: "chip-row" }, FORMATS.map(([v, l]) => {
+    const active = p.formats.includes(v);
+    return h("button", { class: "chip", "aria-pressed": active ? "true" : "false",
+      style: active ? { background: hexA("#0a84ff", 0.14), color: "#0a84ff" } : {},
+      onclick: () => { const i = p.formats.indexOf(v); if (i >= 0) p.formats.splice(i, 1); else p.formats.push(v); save(); renderEinstellungen(); } }, l);
+  }));
+  card.appendChild(prefField("FORMAT", fmtRow));
+
+  const focus = h("textarea", { class: "input", rows: "2", placeholder: 'z. B. „lerne gerade Rust", „suche Co-Founder", „Einstieg in MLOps" …',
+    oninput: (e) => { p.focus = e.target.value; save(); } });
+  focus.value = p.focus || "";
+  card.appendChild(prefField("FOKUS / ZIELE", focus));
+
+  const area = h("input", { class: "input", type: "text", placeholder: "z. B. Innenstadt, Hubland … (optional)", value: p.area || "",
+    oninput: (e) => { p.area = e.target.value; save(); } });
+  card.appendChild(prefField("BEVORZUGTER ORT (OPTIONAL)", area));
+
+  return card;
+}
+
+// Präferenzen für den Agenten in lesbare Form bringen.
+function prefsForAgent() {
+  const p = state.prefs;
+  const m = {
+    days: { weekday: "Werktags", weekend: "Wochenende" },
+    daytime: { morning: "Vormittags", afternoon: "Nachmittags", evening: "Abends" },
+    mode: { online: "Online", inperson: "Vor Ort" },
+    level: { beginner: "Einsteiger", advanced: "Fortgeschritten" },
+    formats: { workshop: "Workshop", talk: "Talk", networking: "Networking", conference: "Konferenz" },
+  };
+  return {
+    days: m.days[p.days] || "", daytime: m.daytime[p.daytime] || "", mode: m.mode[p.mode] || "",
+    level: m.level[p.level] || "", formats: (p.formats || []).map((f) => m.formats[f] || f),
+    focus: (p.focus || "").slice(0, 300), area: (p.area || "").slice(0, 80),
+  };
 }
 
 function buildHistorie() {
