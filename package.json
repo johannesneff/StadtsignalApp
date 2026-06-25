@@ -1,0 +1,10 @@
+{
+  "name": "stadtsignal",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Stadtsignal — Würzburger Tech-Event-Radar (Static-Frontend + Agent-Funktion)",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0"
+  }
+}
