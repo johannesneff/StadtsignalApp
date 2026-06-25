@@ -133,6 +133,22 @@ function eventRow(ev, onClick) {
   );
 }
 
+// Treffer-Karte mit Match-Score, Karten-Sprung und Link zur Eventseite.
+function recoItem(ev, score, extraMeta) {
+  const meta = categoryLabel(ev.category) + " · " + fmtDateTime(ev.startsAt) + (extraMeta ? " · " + extraMeta : "");
+  return h("div", { class: "reco-item" },
+    h("div", {},
+      h("button", { class: "reco-title", onclick: () => goToMap(ev.id) }, ev.title),
+      h("div", { class: "meta" }, meta),
+      h("div", { class: "reco-actions" },
+        h("button", { class: "reco-link", onclick: () => goToMap(ev.id) }, "Auf der Karte"),
+        h("a", { class: "reco-link", href: ev.url, target: "_blank", rel: "noopener" }, "Zur Eventseite →"),
+      ),
+    ),
+    h("span", { class: "match" }, Math.round(score * 100) + "%"),
+  );
+}
+
 /* ============================================================
    SCANNER (KI-Agent + lokale Empfehlungen)
    ============================================================ */
@@ -188,9 +204,7 @@ function renderScanner() {
   left.appendChild(h("div", { class: "card" },
     h("div", { class: "section-eyebrow" }, h("span", { html: I.sparkle }), "Top 3 in den nächsten 14 Tagen"),
     h("div", { class: "reco-list", style: { marginTop: "14px" } },
-      next.map((r) => h("button", { class: "reco-item", onclick: () => goToMap(r.event.id) },
-        h("div", {}, h("div", { class: "t" }, r.event.title), h("div", { class: "meta" }, categoryLabel(r.event.category) + " · " + fmtDateTime(r.event.startsAt))),
-        h("span", { class: "match" }, Math.round(r.score * 100) + "%"))),
+      next.map((r) => recoItem(r.event, r.score)),
     ),
   ));
 
@@ -263,9 +277,7 @@ function renderAgentAnswer(container, text, badge) {
     ids.forEach((id) => {
       const ev = EVENTS.find((e) => e.id === id);
       const sc = scoreAndRank([ev], scoreInput())[0];
-      list.appendChild(h("button", { class: "reco-item", onclick: () => goToMap(id) },
-        h("div", {}, h("div", { class: "t" }, ev.title), h("div", { class: "meta" }, categoryLabel(ev.category) + " · " + fmtDateTime(ev.startsAt))),
-        h("span", { class: "match" }, Math.round(sc.score * 100) + "%")));
+      list.appendChild(recoItem(ev, sc.score));
     });
     card.appendChild(list);
   }
@@ -281,9 +293,7 @@ function renderFallback(container, query) {
     h("div", { class: "muted small", style: { marginBottom: "6px" } }, "Kein KI-Key aktiv – sortiert nach deinem Profil."),
   );
   const list = h("div", { class: "reco-list" });
-  ranked.forEach((r) => list.appendChild(h("button", { class: "reco-item", onclick: () => goToMap(r.event.id) },
-    h("div", {}, h("div", { class: "t" }, r.event.title), h("div", { class: "meta" }, categoryLabel(r.event.category) + " · " + fmtDateTime(r.event.startsAt) + " · " + r.event.source)),
-    h("span", { class: "match" }, Math.round(r.score * 100) + "%"))));
+  ranked.forEach((r) => list.appendChild(recoItem(r.event, r.score, r.event.source)));
   card.appendChild(list);
   container.appendChild(card);
 }

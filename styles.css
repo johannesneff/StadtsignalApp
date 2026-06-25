@@ -237,6 +237,18 @@ a { color: var(--accent); text-decoration: none; }
 .reco-item:hover { border-color: var(--hairline-strong); }
 .reco-item .t { font-weight: 600; font-size: 15px; }
 .reco-item .meta { font-size: 13px; color: var(--text-2); margin-top: 3px; }
+.reco-title {
+  background: none; border: none; padding: 0; margin: 0;
+  font-weight: 600; font-size: 15px; color: var(--text);
+  text-align: left; cursor: pointer; letter-spacing: -0.01em;
+}
+.reco-title:hover { color: var(--accent); }
+.reco-actions { display: flex; gap: 14px; margin-top: 8px; }
+.reco-link {
+  background: none; border: none; padding: 0;
+  font-size: 13px; font-weight: 600; color: var(--accent); cursor: pointer;
+}
+.reco-link:hover { text-decoration: underline; }
 
 /* ---------- Karte / Radar ---------- */
 #map { width: 100%; height: 60vh; min-height: 420px; }
