@@ -7,13 +7,25 @@
 // Bei Fehlern liefert der Endpunkt, was erreichbar war (Frontend hat zusätzlich
 // den kuratierten Seed als Fallback).
 
-// --- Quellen (iCal). Weitere Gruppen/Feeds hier ergänzen. ---
+// --- Quellen (iCal). techOnly=true filtert breite Kalender auf Tech-Events. ---
 const ICAL_SOURCES = [
   { name: "Meetup · DATA & ANALYTICS", url: "https://www.meetup.com/wurzburg-data-analytics-meetup/events/ical/" },
   { name: "Meetup · Analytics Pioneers", url: "https://www.meetup.com/analytics-pioneers-wurzburg/events/ical/" },
   { name: "Meetup · Modern Software Dev", url: "https://www.meetup.com/wuerzburg-software-development/events/ical/" },
   { name: "Meetup · Deep Learning", url: "https://www.meetup.com/Wurzburg-Deep-Learning-Meetup/events/ical/" },
+  { name: "FRIZZ Würzburg", url: "https://frizz-wuerzburg.de/search/event/veranstaltungskalender/calendar.ics", techOnly: true },
 ];
+
+// --- Quellen (RSS), z. B. TYPO3-Veranstaltungs-Feeds. ---
+const RSS_SOURCES = [
+  { name: "Uni Würzburg", url: "https://www.uni-wuerzburg.de/index.php?id=197207&type=151", techOnly: true },
+];
+
+// Tech-Relevanz-Filter für breite Kalender (Kultur etc. wird ausgesiebt).
+function techRelevant(text) {
+  const t = (text || "").toLowerCase();
+  return /\bki\b|\bai\b|\bit\b|\bllm\b|tech|software|programmier|develop|entwickl|daten|\bdata\b|cyber|security|sicherheit|digital|robot|\bweb\b|cloud|devops|machine learning|deep learning|hackathon|startup|gründ|innovation|coding|python|javascript|\bux\b/.test(t);
+}
 
 const WUE = [49.7913, 9.9534];
 const VENUE_COORDS = [
@@ -118,7 +130,58 @@ async function fetchSource(src) {
     const r = await fetch(src.url, { headers: { "user-agent": "StadtsignalBot/1.0" } });
     if (!r.ok) return { name: src.name, ok: false, count: 0, error: `HTTP ${r.status}` };
     const ics = await r.text();
-    const events = parseIcal(ics, src.name);
+    let events = parseIcal(ics, src.name);
+    if (src.techOnly) events = events.filter((e) => techRelevant(e.title + " " + e.description));
+    return { name: src.name, ok: true, count: events.length, events };
+  } catch (err) {
+    return { name: src.name, ok: false, count: 0, error: err?.message || "fetch failed" };
+  }
+}
+
+// --- RSS-Parsing (TYPO3/WordPress) ---
+function stripHtml(s) { return (s || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(); }
+function decodeEntities(s) {
+  return (s || "")
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ");
+}
+function rssTag(item, tag) {
+  const m = item.match(new RegExp("<" + tag + "(?:[^>]*)>([\\s\\S]*?)</" + tag + ">", "i"));
+  return m ? decodeEntities(m[1]).trim() : "";
+}
+function parseRss(xml, sourceName) {
+  const out = [];
+  const items = xml.split(/<item[ >]/i).slice(1);
+  for (const raw of items) {
+    const item = raw.split(/<\/item>/i)[0];
+    const title = stripHtml(rssTag(item, "title"));
+    const pub = rssTag(item, "pubDate") || rssTag(item, "dc:date");
+    if (!title || !pub) continue;
+    const t = new Date(pub);
+    if (isNaN(t.getTime())) continue;
+    const startsAt = t.toISOString();
+    const link = rssTag(item, "link") || "";
+    const description = stripHtml(rssTag(item, "description")).slice(0, 400);
+    const id = (slug(sourceName).slice(0, 6) + "-" + slug(link || title)).slice(0, 48);
+    const category = categorize(title + " " + description);
+    const [lat, lng] = geocode("", id);
+    out.push({
+      id, title, description: description || "—", startsAt, endsAt: null,
+      location: "Würzburg", lat, lng,
+      category, tags: tagsFor(title + " " + description, category),
+      url: link || "https://www.uni-wuerzburg.de/aktuelles/veranstaltungen/", source: sourceName,
+    });
+  }
+  return out;
+}
+async function fetchRss(src) {
+  try {
+    const r = await fetch(src.url, { headers: { "user-agent": "StadtsignalBot/1.0" } });
+    if (!r.ok) return { name: src.name, ok: false, count: 0, error: `HTTP ${r.status}` };
+    const xml = await r.text();
+    let events = parseRss(xml, src.name);
+    if (src.techOnly) events = events.filter((e) => techRelevant(e.title + " " + e.description));
     return { name: src.name, ok: true, count: events.length, events };
   } catch (err) {
     return { name: src.name, ok: false, count: 0, error: err?.message || "fetch failed" };
@@ -175,7 +238,11 @@ export default async function handler(req, res) {
     return;
   }
 
-  const results = await Promise.all([...ICAL_SOURCES.map(fetchSource), fetchAiWeek()]);
+  const results = await Promise.all([
+    ...ICAL_SOURCES.map(fetchSource),
+    ...RSS_SOURCES.map(fetchRss),
+    fetchAiWeek(),
+  ]);
   let events = [];
   for (const r of results) if (r.ok && r.events) events = events.concat(r.events);
 

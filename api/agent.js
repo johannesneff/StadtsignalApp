@@ -12,7 +12,7 @@
 // automatisch auf die lokale Scoring-Empfehlung zurück.
 
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-const MAX_TOKENS = 600;
+const MAX_TOKENS = 900;
 
 const FORMAT = `Du bist der „Stadtsignal"-Tech-Radar-Agent für die Würzburger IT-Community.
 Du hilfst, passende IT-Events rund um Würzburg zu finden.
@@ -29,12 +29,18 @@ ANTWORTE IMMER AUF DEUTSCH und IMMER GENAU IN DIESEM FORMAT:
 📍 Treffer
 - [id] **Titel** — Match XX% — kurze Begründung in einem Satz
 - [id] **Titel** — Match XX% — Begründung
-(3–5 Treffer)
+(3–5 Treffer aus dem EVENT-POOL, EXAKTE id in eckigen Klammern)
 
-Wähle ausschließlich Events aus dem EVENT-POOL und nutze deren EXAKTE id in eckigen Klammern.
-Berücksichtige den ANGEGEBENEN AKTUELLEN ZEITPUNKT: Schlage KEINE bereits beendeten Events vor. Aktuell laufende oder noch kommende Events sind erlaubt; bevorzuge zeitlich passende Treffer (z. B. „heute", „heute Abend", „diese Woche").
-Bei breiten Anfragen darfst du auch ein Event außerhalb der Interessen vorschlagen; beginne die Begründung dann mit „Überraschungs-Tipp: …".
-Fasse dich kurz.`;
+🌐 Weitere aktuelle Funde (Websuche)
+- **Titel** — Datum/Uhrzeit — Ort — kurze Begründung — https://link-zur-eventseite
+(0–3 ZUSÄTZLICHE, noch nicht beendete IT-/Tech-Events in Würzburg/Mainfranken, die NICHT im EVENT-POOL stehen – per Websuche aus Quellen wie ZDI Mainfranken, THWS, Uni Würzburg, IHK, Stadt Würzburg, Gründerzentren, Eventbrite. Immer mit echtem Link. Liefert die Suche nichts Verlässliches, diesen Abschnitt KOMPLETT weglassen.)
+
+Regeln:
+- „📍 Treffer": ausschließlich Events aus dem EVENT-POOL mit deren EXAKTER id.
+- „🌐 Weitere Funde": nur per Websuche verifizierte, reale Events mit Link; KEINE id; nichts erfinden.
+- Berücksichtige den ANGEGEBENEN AKTUELLEN ZEITPUNKT: Schlage KEINE bereits beendeten Events vor; laufende/kommende sind erlaubt; bevorzuge zeitlich passende Treffer („heute", „heute Abend", „diese Woche").
+- Bei breiten Anfragen ist auch ein Event außerhalb der Interessen ok; Begründung dann mit „Überraschungs-Tipp: …".
+- Fasse dich kurz.`;
 
 function fmtDe(iso) {
   try {
@@ -92,10 +98,13 @@ export default async function handler(req, res) {
   const payload = JSON.stringify({
     systemInstruction: { parts: [{ text: systemText }] },
     contents: [{ role: "user", parts: [{ text: userMessage }] }],
+    // Websuche-Grounding: erlaubt dem Agenten, Events aus nicht-angebundenen
+    // Quellen (ZDI, THWS, Uni, IHK, Stadt, Eventbrite …) live zu finden.
+    tools: [{ google_search: {} }],
     generationConfig: {
       maxOutputTokens: MAX_TOKENS,
       temperature: 0.5,
-      // Thinking aus: sonst frisst es bei 2.5-flash das Token-Budget -> leere Antwort.
+      // Thinking aus -> Token-Budget bleibt für die Antwort (sonst abgeschnitten).
       thinkingConfig: { thinkingBudget: 0 },
     },
   });

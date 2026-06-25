@@ -282,8 +282,9 @@ function eventIdsInText(text) {
   return ids;
 }
 function formatAgentText(text) {
-  // Escapen, dann **fett** und Zeilenumbrüche zulassen.
+  // Escapen, dann **fett**, dann URLs (z. B. aus dem Websuche-Abschnitt) klickbar machen.
   let safe = esc(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  safe = safe.replace(/(https?:\/\/[^\s<]+[^\s<.,;:)\]])/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
   return safe;
 }
 function renderAgentAnswer(container, text, badge) {

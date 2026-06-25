@@ -15,6 +15,17 @@ Apple-minimalistisches, helles UI. **Hybrid-Architektur:** statisches Frontend
 
 Profil, Interessen, Historie und Notizen liegen im `localStorage`.
 
+## Echte Event-Quellen ([api/events.js](api/events.js))
+
+Angebunden (live, cache 6 h, abgelaufene Events werden anhand der aktuellen Zeit ausgefiltert; laufende bleiben):
+
+- **Meetup** (iCal) – Würzburger Tech-Gruppen
+- **AI Week Mainfranken** (Timetable-JSON, mit Koordinaten)
+- **FRIZZ Würzburg** (iCal, auf Tech gefiltert)
+- **Uni Würzburg** (Veranstaltungs-RSS, auf Tech gefiltert)
+
+Quellen ohne abrufbaren Feed (ZDI, THWS, IHK, Stadt Würzburg, Gründerzentren, Eventbrite) deckt der **Agent per Websuche** ab (Google-Search-Grounding) und listet Funde im Abschnitt „🌐 Weitere Funde" mit Link.
+
 ## KI-Agent (kostenlos)
 
 - Modell: **Google Gemini** (`gemini-2.5-flash`, kostenloser AI-Studio Free-Tier) über die Serverless-Funktion [`api/agent.js`](api/agent.js) – per REST/`fetch`, **ohne SDK**.
