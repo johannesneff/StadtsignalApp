@@ -87,7 +87,10 @@ function toggleVisited(id) {
 
 /* ---------------------- Icons ---------------------- */
 const I = {
-  overview: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>',
+  // Übersicht — gefüllter Standort-Pfeil (Stil: location.fill)
+  overview: '<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.2 3.5 20.3a1 1 0 0 0 1.32 1.31L12 18.25l7.18 3.36A1 1 0 0 0 20.5 20.3L12 2.2Z"/></svg>',
+  // Scanner-Tab — gerundetes Quadrat mit Punktraster (Stil: app.background.dotted)
+  scanner: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="18" height="18" rx="5"/><g fill="currentColor" stroke="none"><circle cx="8" cy="8" r="1.15"/><circle cx="12" cy="8" r="1.15"/><circle cx="16" cy="8" r="1.15"/><circle cx="8" cy="12" r="1.15"/><circle cx="12" cy="12" r="1.15"/><circle cx="16" cy="12" r="1.15"/><circle cx="8" cy="16" r="1.15"/><circle cx="12" cy="16" r="1.15"/><circle cx="16" cy="16" r="1.15"/></g></svg>',
   sparkle: '<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5c.3 2.9 1.6 4.2 4.5 4.5-2.9.3-4.2 1.6-4.5 4.5-.3-2.9-1.6-4.2-4.5-4.5C10.4 6.7 11.7 5.4 12 2.5Zm6.5 9c.2 1.7 1 2.5 2.7 2.7-1.7.2-2.5 1-2.7 2.7-.2-1.7-1-2.5-2.7-2.7 1.7-.2 2.5-1 2.7-2.7Zm-12 2c.2 1.4.8 2 2.2 2.2-1.4.2-2 .8-2.2 2.2-.2-1.4-.8-2-2.2-2.2 1.4-.2 2-.8 2.2-2.2Z"/></svg>',
   gear: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 7 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 14H4.5a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 6 8.6a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 11 4.6V4.5a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 17.4 6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 21.4 11h.1a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>',
   radio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="24" height="24"><circle cx="12" cy="12" r="2"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4M5 19a10 10 0 0 1 0-14M19 5a10 10 0 0 1 0 14"/></svg>',
@@ -650,7 +653,7 @@ function sendNewsletter() {
    ============================================================ */
 const SCREENS = [
   { id: "uebersicht", label: "Übersicht", icon: I.overview, render: renderUebersicht },
-  { id: "scanner", label: "Scanner", icon: I.sparkle, render: renderScanner, fab: true },
+  { id: "scanner", label: "Scanner", icon: I.scanner, render: renderScanner, fab: true },
   { id: "einstellungen", label: "Einstellungen", icon: I.gear, render: renderEinstellungen },
 ];
 let currentScreen = "scanner";
