@@ -436,7 +436,7 @@ function filterByQuery(events, query) {
    ÜBERSICHT (Karte + Kalender)
    ============================================================ */
 let overviewTab = "karte";
-let map = null, heatLayer = null, markers = [], markerById = {}, selectedRange = 0;
+let map = null, heatLayer = null, markers = [], markerById = {}, mapDayOffset = 0;
 let calMonth = new Date().getMonth(), calYear = new Date().getFullYear(), calSelected = null;
 
 function destroyMap() {
@@ -473,27 +473,49 @@ function renderUebersicht() {
 }
 
 /* --- Karte --- */
+function dayStart(offset) { const d = startOfToday(); d.setDate(d.getDate() + offset); return d; }
+function dayLabelShort(offset) { const d = dayStart(offset); return `${WD[d.getDay()]} ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.`; }
+function eventsOnOffset(offset) { const base = dayStart(offset); return EVENTS.filter((e) => !isExpired(e) && sameDay(e.startsAt, base)); }
+function maxDayOffset() {
+  let mx = 0;
+  EVENTS.forEach((e) => { if (!isExpired(e)) { const o = dayOffset(e.startsAt); if (o > mx) mx = o; } });
+  return Math.min(Math.max(mx, 0), 120);
+}
+
 function buildMapCard() {
   return h("div", { class: "card flush map-card" },
     h("div", { style: { padding: "16px 18px", display: "flex", justifyContent: "space-between", alignItems: "baseline" } },
       h("div", { class: "section-title", style: { fontSize: "20px" } }, "Radar"),
-      h("div", { class: "muted small", id: "range-label" }, rangeText(selectedRange))),
+      h("div", { class: "muted small", id: "map-day-top" }, mapDayOffset === 0 ? "Heute" : dayLabelShort(mapDayOffset))),
     h("div", { id: "map" }),
-    h("div", { class: "range-bar" },
-      h("label", { for: "range" }, "Zeitraum"),
-      h("input", { type: "range", id: "range", min: "0", max: "6", step: "1", value: String(selectedRange),
-        oninput: (e) => { selectedRange = +e.target.value; updateRangeLabel(); refreshMapData(); } }),
-      h("span", { class: "range-val tnum", id: "range-val" }, rangeText(selectedRange))),
+    h("div", { class: "day-stepper" },
+      h("button", { class: "cal-nav", id: "day-prev", "aria-label": "Vorheriger Tag", onclick: () => stepDay(-1) }, "‹"),
+      h("div", { class: "day-field" },
+        h("div", { class: "day-label", id: "day-label" }, dayLabelShort(mapDayOffset) + (mapDayOffset === 0 ? " · Heute" : "")),
+        h("div", { class: "day-count muted small", id: "day-count" }, eventsOnOffset(mapDayOffset).length + " Events")),
+      h("button", { class: "cal-nav", id: "day-next", "aria-label": "Nächster Tag", onclick: () => stepDay(1) }, "›")),
     h("div", { class: "legend" },
       ["ai", "dev", "data", "security"].map((c) =>
         h("span", { class: "item" }, h("span", { class: "dot", style: { background: interestColor(c) } }), categoryLabel(c)))),
+    h("div", { class: "legend density-legend" },
+      h("span", { class: "item muted small" }, "Verdichtung:"),
+      h("span", { class: "density-bar" }),
+      h("span", { class: "item muted small" }, "wenig → viel")),
   );
 }
-function rangeText(n) { return n === 0 ? "Heute" : "Tag +" + n; }
-function updateRangeLabel() {
-  const a = $("#range-val"), b = $("#range-label");
-  if (a) a.textContent = rangeText(selectedRange);
-  if (b) b.textContent = rangeText(selectedRange);
+function stepDay(delta) {
+  const mx = maxDayOffset();
+  mapDayOffset = Math.min(mx, Math.max(0, mapDayOffset + delta));
+  refreshMapData();
+}
+function updateDayUI() {
+  const mx = maxDayOffset();
+  const lbl = $("#day-label"), cnt = $("#day-count"), top = $("#map-day-top"), prev = $("#day-prev"), next = $("#day-next");
+  if (lbl) lbl.textContent = dayLabelShort(mapDayOffset) + (mapDayOffset === 0 ? " · Heute" : "");
+  if (cnt) cnt.textContent = eventsOnOffset(mapDayOffset).length + " Events";
+  if (top) top.textContent = mapDayOffset === 0 ? "Heute" : dayLabelShort(mapDayOffset);
+  if (prev) prev.disabled = mapDayOffset <= 0;
+  if (next) next.disabled = mapDayOffset >= mx;
 }
 function maybeInitMap() {
   if (currentScreen !== "uebersicht" || overviewTab !== "karte") return;
@@ -515,24 +537,29 @@ function refreshMapData() {
   markers.forEach((m) => map.removeLayer(m));
   markers = []; markerById = {};
   if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; }
+
+  // Nur Events des gewählten Tages anzeigen.
+  const evs = eventsOnOffset(mapDayOffset);
   const heatPts = [];
-  EVENTS.forEach((ev) => {
-    const off = dayOffset(ev.startsAt);
-    const proximity = Math.max(0, 1 - Math.abs(off - selectedRange) * 0.45);
-    if (off >= 0) heatPts.push([ev.lat, ev.lng, Math.max(0.15, proximity)]);
+  evs.forEach((ev) => {
+    heatPts.push([ev.lat, ev.lng, 1]); // Dichte: mehrere Events am selben Ort -> heißer
     const marker = L.circleMarker([ev.lat, ev.lng], {
-      radius: 8, color: "#fff", weight: 2, fillColor: interestColor(ev.category),
-      fillOpacity: off === selectedRange ? 1 : 0.7,
+      radius: 9, color: "#fff", weight: 2, fillColor: interestColor(ev.category), fillOpacity: 0.95,
     });
     marker.bindPopup(popupHtml(ev));
     marker.addTo(map);
     markers.push(marker); markerById[ev.id] = marker;
   });
-  if (typeof L.heatLayer === "function") {
-    heatLayer = L.heatLayer(heatPts, { radius: 38, blur: 28, maxZoom: 15,
-      gradient: { 0.2: "#bcd9ff", 0.5: "#5fa8ff", 0.8: "#0a84ff", 1: "#0040a0" } });
+
+  // Dichte-Heatmap mit Farbskala (wenig -> viel): blau/grün -> gelb -> rot.
+  if (typeof L.heatLayer === "function" && heatPts.length) {
+    heatLayer = L.heatLayer(heatPts, {
+      radius: 42, blur: 30, minOpacity: 0.25, max: 2.5, maxZoom: 16,
+      gradient: { 0.0: "#2c7fb8", 0.3: "#41b6c4", 0.5: "#7fcdbb", 0.7: "#c7e9b4", 0.85: "#ffffb2", 0.93: "#fd8d3c", 1.0: "#e31a1c" },
+    });
     heatLayer.addTo(map);
   }
+  updateDayUI();
 }
 function popupHtml(ev) {
   const visited = isVisited(ev.id);
@@ -548,8 +575,9 @@ function popupHtml(ev) {
 function goToMap(id) {
   overviewTab = "karte";
   go("uebersicht");
-  renderUebersicht();
   const ev = EVENTS.find((e) => e.id === id);
+  if (ev) mapDayOffset = Math.max(0, dayOffset(ev.startsAt)); // auf den Tag des Events springen
+  renderUebersicht();
   setTimeout(() => {
     initMap();
     if (!map || !ev) return;
