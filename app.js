@@ -73,6 +73,13 @@ function sameDay(iso, date) {
   const d = new Date(iso);
   return d.getFullYear() === date.getFullYear() && d.getMonth() === date.getMonth() && d.getDate() === date.getDate();
 }
+// Ende eines Events (oder Start + 3 h, falls kein Ende bekannt).
+function eventEnd(e) {
+  return e.endsAt ? new Date(e.endsAt).getTime() : new Date(e.startsAt).getTime() + 3 * 60 * 60 * 1000;
+}
+// Abgelaufen = bereits beendet. Laufende (gestartet, noch nicht beendet) gelten als aktiv.
+function isExpired(e) { return eventEnd(e) < Date.now(); }
+function activeEvents() { return EVENTS.filter((e) => !isExpired(e)); }
 
 function scoreInput() {
   return { interests: state.interests, historyTags: aggregateHistoryTags(state.history, EVENTS) };
@@ -191,7 +198,7 @@ function renderScanner() {
     thinking, results,
   ));
 
-  const ranked = scoreAndRank(EVENTS.filter((e) => dayOffset(e.startsAt) >= 0), scoreInput());
+  const ranked = scoreAndRank(activeEvents(), scoreInput());
   const top = ranked[0];
   if (top) {
     const ev = top.event;
@@ -250,9 +257,10 @@ async function runScannerSearch(query, thinkingEl, resultsEl, goBtn) {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({
         query,
+        now: new Date().toISOString(),
         interestLabels: state.interests.map((i) => (INTEREST_BY_ID[i] || {}).label || i),
         history: state.history,
-        events: EVENTS.map((e) => ({ id: e.id, title: e.title, category: e.category, tags: e.tags, startsAt: e.startsAt, location: e.location, description: e.description })),
+        events: activeEvents().map((e) => ({ id: e.id, title: e.title, category: e.category, tags: e.tags, startsAt: e.startsAt, endsAt: e.endsAt || null, location: e.location, description: e.description })),
       }),
     });
     if (r.ok) { const d = await r.json(); realText = (d && d.text) ? d.text : null; }
@@ -634,7 +642,7 @@ function isoWeek(d) {
   return 1 + Math.round(((date - firstThursday) / DAY - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
 }
 function digestEvents() {
-  const ranked = scoreAndRank(EVENTS.filter((e) => dayOffset(e.startsAt) >= 0), scoreInput());
+  const ranked = scoreAndRank(activeEvents(), scoreInput());
   return ranked.filter((r) => r.event.tags.some((t) => state.interests.includes(t))).slice(0, 4);
 }
 function thumbUrl(ev) { return `https://picsum.photos/seed/${ev.id}stadtsignal/200/200`; }

@@ -93,6 +93,7 @@ function parseIcal(ics, sourceName) {
     const block = raw.split("END:VEVENT")[0];
     const startsAt = parseDt(getProp(block, "DTSTART"));
     if (!startsAt) continue;
+    const endsAt = parseDt(getProp(block, "DTEND"));
     const title = unescapeText((getProp(block, "SUMMARY") || {}).value).trim();
     if (!title) continue;
     const description = unescapeText((getProp(block, "DESCRIPTION") || {}).value).trim().slice(0, 400);
@@ -103,7 +104,7 @@ function parseIcal(ics, sourceName) {
     const category = categorize(title + " " + description);
     const [lat, lng] = geocode(location, id);
     out.push({
-      id, title, description: description || "—", startsAt,
+      id, title, description: description || "—", startsAt, endsAt,
       location: location || "Würzburg", lat, lng,
       category, tags: tagsFor(title + " " + description, category),
       url: url || "https://www.meetup.com/", source: sourceName,
@@ -155,6 +156,7 @@ async function fetchAiWeek() {
       const category = categorize(`${title} ${desc} ${channel}`);
       events.push({
         id, title, description: desc || "AI Week Mainfranken", startsAt,
+        endsAt: (s.end || "").trim() || null,
         location: online ? "Online · AI Week" : location, lat, lng,
         category, tags: tagsFor(`${title} ${desc} ${channel}`, category),
         url, source: AIWEEK_NAME,
@@ -177,11 +179,16 @@ export default async function handler(req, res) {
   let events = [];
   for (const r of results) if (r.ok && r.events) events = events.concat(r.events);
 
-  // nur kommende Events, dedupe per id, nach Datum sortiert
-  const cutoff = new Date(now - 1000 * 60 * 60 * 12);
+  // Abgelaufene Events raus (laufende bleiben): Ende >= jetzt.
+  // Ohne Endzeit: Annahme 3 h Dauer ab Start.
+  const HOURS3 = 1000 * 60 * 60 * 3;
+  const notEnded = (e) => {
+    const end = e.endsAt ? new Date(e.endsAt).getTime() : new Date(e.startsAt).getTime() + HOURS3;
+    return end >= now;
+  };
   const seen = new Set();
   events = events
-    .filter((e) => new Date(e.startsAt) >= cutoff)
+    .filter(notEnded)
     .filter((e) => (seen.has(e.id) ? false : seen.add(e.id)))
     .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
 

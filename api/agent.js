@@ -32,18 +32,21 @@ ANTWORTE IMMER AUF DEUTSCH und IMMER GENAU IN DIESEM FORMAT:
 (3–5 Treffer)
 
 Wähle ausschließlich Events aus dem EVENT-POOL und nutze deren EXAKTE id in eckigen Klammern.
+Berücksichtige den ANGEGEBENEN AKTUELLEN ZEITPUNKT: Schlage KEINE bereits beendeten Events vor. Aktuell laufende oder noch kommende Events sind erlaubt; bevorzuge zeitlich passende Treffer (z. B. „heute", „heute Abend", „diese Woche").
 Bei breiten Anfragen darfst du auch ein Event außerhalb der Interessen vorschlagen; beginne die Begründung dann mit „Überraschungs-Tipp: …".
 Fasse dich kurz.`;
 
+function fmtDe(iso) {
+  try {
+    return new Date(iso).toLocaleString("de-DE", {
+      weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Berlin",
+    });
+  } catch { return iso; }
+}
 function buildEventPool(events) {
   return events
     .map((e) => {
-      let when = e.startsAt;
-      try {
-        when = new Date(e.startsAt).toLocaleString("de-DE", {
-          weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
-        });
-      } catch { /* roher Wert */ }
+      const when = fmtDe(e.startsAt) + (e.endsAt ? "–" + fmtDe(e.endsAt) : "");
       const tags = Array.isArray(e.tags) ? e.tags.join(",") : "";
       return `- [${e.id}] "${e.title}" | ${e.category} | tags: ${tags} | ${when} | ${e.location} | ${e.description}`;
     })
@@ -76,29 +79,40 @@ export default async function handler(req, res) {
   if (!query.trim()) { res.status(400).json({ error: "Leere Anfrage" }); return; }
   if (!events.length) { res.status(400).json({ error: "Kein Event-Pool übergeben" }); return; }
 
+  const nowIso = (body.now && typeof body.now === "string") ? body.now : new Date().toISOString();
   const systemText = `${FORMAT}\n\nEVENT-POOL:\n${buildEventPool(events)}`;
   const userMessage =
+    `Aktueller Zeitpunkt: ${fmtDe(nowIso)} (Europe/Berlin).\n` +
     `Aktive Interessen: ${interestLabels.join(", ") || "(keine)"}.\n` +
     `Besuchte Event-IDs: ${history.length ? history.join(", ") : "(keine)"}.\n\n` +
     `Frage: ${query}`;
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
+  const payload = JSON.stringify({
+    systemInstruction: { parts: [{ text: systemText }] },
+    contents: [{ role: "user", parts: [{ text: userMessage }] }],
+    generationConfig: {
+      maxOutputTokens: MAX_TOKENS,
+      temperature: 0.5,
+      // Thinking aus: sonst frisst es bei 2.5-flash das Token-Budget -> leere Antwort.
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+  });
+  const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
   try {
-    const r = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemText }] },
-        contents: [{ role: "user", parts: [{ text: userMessage }] }],
-        generationConfig: {
-          maxOutputTokens: MAX_TOKENS,
-          temperature: 0.5,
-          // Thinking aus: sonst frisst es bei 2.5-flash das Token-Budget -> leere Antwort.
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      }),
-    });
+    let r;
+    // Bis zu 3 Versuche; bei 429/503 (Free-Tier-Überlastung) kurz warten und erneut.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      r = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": key },
+        body: payload,
+      });
+      if (r.ok || (r.status !== 503 && r.status !== 429)) break;
+      if (attempt < 2) await sleep(700 * (attempt + 1));
+    }
 
     if (!r.ok) {
       const detail = await r.text().catch(() => "");
