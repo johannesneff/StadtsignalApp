@@ -124,6 +124,48 @@ async function fetchSource(src) {
   }
 }
 
+// AI Week Mainfranken: eigene Timetable-JSON-API (kein iCal nötig).
+const AIWEEK_NAME = "AI Week Mainfranken";
+function truthy(v) { return v === true || v === "True" || v === "true" || v === 1; }
+async function fetchAiWeek() {
+  try {
+    const r = await fetch("https://backend.timetable.ai-week.de/export/session.json", { headers: { "user-agent": "StadtsignalBot/1.0" } });
+    if (!r.ok) return { name: AIWEEK_NAME, ok: false, count: 0, error: `HTTP ${r.status}` };
+    const data = await r.json();
+    const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+    const events = [];
+    for (const s of sessions) {
+      if (truthy(s.cancelled)) continue;
+      const title = (s.title || "").trim();
+      const startsAt = (s.start || "").trim();
+      if (!title || !startsAt) continue;
+      const desc = (s.description && s.description.short) ? String(s.description.short).trim().slice(0, 400) : "";
+      const loc = s.location || null;
+      const online = truthy(s.onlineOnly) || !loc;
+      const location = loc
+        ? [loc.name, loc.streetNo, loc.city].filter(Boolean).join(", ")
+        : "Online";
+      const id = "aiweek-" + (s.id || slug(title));
+      let lat, lng;
+      if (loc && typeof loc.lat === "number" && typeof loc.lng === "number") { lat = loc.lat; lng = loc.lng; }
+      else { [lat, lng] = geocode(online ? "" : location, id); }
+      const linkVal = s.links && s.links.event ? String(s.links.event) : "";
+      const url = /^https?:\/\//i.test(linkVal) ? linkVal : "https://www.ai-week.de/programm.php";
+      const channel = (s.channel && s.channel.name) ? s.channel.name : "";
+      const category = categorize(`${title} ${desc} ${channel}`);
+      events.push({
+        id, title, description: desc || "AI Week Mainfranken", startsAt,
+        location: online ? "Online · AI Week" : location, lat, lng,
+        category, tags: tagsFor(`${title} ${desc} ${channel}`, category),
+        url, source: AIWEEK_NAME,
+      });
+    }
+    return { name: AIWEEK_NAME, ok: true, count: events.length, events };
+  } catch (err) {
+    return { name: AIWEEK_NAME, ok: false, count: 0, error: err?.message || "fetch failed" };
+  }
+}
+
 export default async function handler(req, res) {
   const now = Date.now();
   if (CACHE.data && now - CACHE.at < TTL && !(req.query && req.query.refresh)) {
@@ -131,7 +173,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const results = await Promise.all(ICAL_SOURCES.map(fetchSource));
+  const results = await Promise.all([...ICAL_SOURCES.map(fetchSource), fetchAiWeek()]);
   let events = [];
   for (const r of results) if (r.ok && r.events) events = events.concat(r.events);
 
