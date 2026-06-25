@@ -349,14 +349,16 @@ a { color: var(--accent); text-decoration: none; }
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   font-size: 11px; color: var(--text-2); padding: 6px 0;
 }
-.tabbar button .ico { width: 26px; height: 26px; }
+.tabbar button > .ico { width: 26px; height: 26px; display: grid; place-items: center; }
+.tabbar button > .ico svg { width: 26px; height: 26px; display: block; }
 .tabbar button[aria-current="page"] { color: var(--accent); }
-.tabbar button.fab .ico {
+.tabbar button.fab > .ico {
   width: 56px; height: 56px; border-radius: 50%;
   background: var(--accent); color: #fff;
   display: grid; place-items: center; margin-top: -22px;
   box-shadow: var(--shadow-card);
 }
+.tabbar button.fab > .ico svg { width: 30px; height: 30px; }
 .tabbar button.fab { color: var(--text); }
 
 /* ---------- Modal (Newsletter-Vorschau) ---------- */
