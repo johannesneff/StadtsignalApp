@@ -294,23 +294,107 @@ function formatAgentText(text) {
   safe = safe.replace(/(https?:\/\/[^\s<]+[^\s<.,;:)\]])/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
   return safe;
 }
+// Zerlegt die Agenten-Antwort in 📍 Pool-Treffer und 🌐 Web-Funde.
+function parseAgentText(text) {
+  const poolHits = [], webHits = [];
+  let section = "";
+  for (const raw of String(text).split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith("🧠")) { section = "think"; continue; }
+    if (line.startsWith("📍")) { section = "pool"; continue; }
+    if (line.startsWith("🌐")) { section = "web"; continue; }
+    if (section === "pool" && line.includes("[")) {
+      let m = line.match(/\[([a-z0-9_-]+)\][^*]*\*\*(.+?)\*\*\s*[—–-]+\s*Match\s*(\d+)\s*%\s*[—–-]+\s*(.+)$/i);
+      if (m) { poolHits.push({ id: m[1], match: +m[3], reason: m[4].trim() }); continue; }
+      m = line.match(/\[([a-z0-9_-]+)\][^*]*\*\*(.+?)\*\*\s*[—–-]+\s*(.+)$/i);
+      if (m) { poolHits.push({ id: m[1], reason: m[3].trim() }); continue; }
+      m = line.match(/\[([a-z0-9_-]+)\]/i);
+      if (m) poolHits.push({ id: m[1] });
+    } else if (section === "web" && line.startsWith("-")) {
+      const body = line.replace(/^[-\s]+/, "");
+      const tm = body.match(/\*\*(.+?)\*\*/);
+      const um = body.match(/https?:\/\/[^\s)]+/);
+      const url = um ? um[0] : "";
+      const title = (tm ? tm[1] : body.split(/\s[—–-]\s/)[0]).replace(/\*\*/g, "").trim();
+      const middle = body.replace(/\*\*.+?\*\*/, "").replace(url, "");
+      const parts = middle.split(/\s[—–-]\s/).map((s) => s.replace(/^[—–\-\s]+|[—–\-\s]+$/g, "")).filter(Boolean);
+      if (title) webHits.push({ title, meta: parts.join(" · "), url });
+    }
+  }
+  return { poolHits, webHits };
+}
+
+// Pool-Treffer als Panel-Karte (Begründung des Agenten + Match + Links).
+function recoCard(ev, match, reason) {
+  const pct = (match != null) ? match : Math.round(scoreAndRank([ev], scoreInput())[0].score * 100);
+  return h("div", { class: "reco-item" },
+    h("div", {},
+      h("button", { class: "reco-title", onclick: () => goToMap(ev.id) }, ev.title),
+      h("div", { class: "meta" }, categoryLabel(ev.category) + " · " + fmtDateTime(ev.startsAt) + (ev.location ? " · " + ev.location : "")),
+      reason ? h("div", { class: "reco-reason" }, reason) : null,
+      h("div", { class: "reco-actions" },
+        h("button", { class: "reco-link", onclick: () => goToMap(ev.id) }, "Auf der Karte"),
+        h("a", { class: "reco-link", href: ev.url, target: "_blank", rel: "noopener" }, "Zur Eventseite →"))),
+    h("span", { class: "match" }, pct + "%"));
+}
+
+// Web-Fund als Panel-Karte (Titel verlinkt, Meta, „Web"-Badge).
+function webCard(w) {
+  return h("div", { class: "reco-item" },
+    h("div", {},
+      w.url
+        ? h("a", { class: "reco-title", href: w.url, target: "_blank", rel: "noopener" }, w.title)
+        : h("div", { class: "reco-title" }, w.title),
+      w.meta ? h("div", { class: "meta" }, w.meta) : null,
+      w.url ? h("div", { class: "reco-actions" }, h("a", { class: "reco-link", href: w.url, target: "_blank", rel: "noopener" }, "Zur Eventseite →")) : null),
+    h("span", { class: "match", style: { background: "#ececef", color: "#6e6e73" } }, "Web"));
+}
+
 function renderAgentAnswer(container, text, badge) {
   const card = h("div", { class: "card agent-answer" });
   card.appendChild(h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" } },
     h("div", { class: "section-eyebrow" }, h("span", { html: I.sparkle }), "Antwort des Agenten"),
     h("span", { class: "match" }, badge)));
-  card.appendChild(h("div", { class: "agent-text", html: formatAgentText(text) }));
 
-  const ids = eventIdsInText(text);
-  if (ids.length) {
-    const list = h("div", { class: "reco-list", style: { marginTop: "14px" } });
-    ids.forEach((id) => {
+  const { poolHits, webHits } = parseAgentText(text);
+
+  // 📍 Pool-Treffer als Karten
+  const poolList = h("div", { class: "reco-list" });
+  let poolCount = 0;
+  const usedIds = new Set();
+  poolHits.forEach((hit) => {
+    const ev = EVENTS.find((e) => e.id === hit.id);
+    if (!ev || usedIds.has(ev.id)) return;
+    usedIds.add(ev.id);
+    poolList.appendChild(recoCard(ev, hit.match != null ? hit.match : null, hit.reason));
+    poolCount++;
+  });
+  // Fallback, falls das Parsen scheitert, aber IDs im Text stehen
+  if (!poolCount) {
+    eventIdsInText(text).forEach((id) => {
       const ev = EVENTS.find((e) => e.id === id);
-      const sc = scoreAndRank([ev], scoreInput())[0];
-      list.appendChild(recoItem(ev, sc.score));
+      if (!ev || usedIds.has(id)) return;
+      usedIds.add(id);
+      poolList.appendChild(recoCard(ev, null, null));
+      poolCount++;
     });
-    card.appendChild(list);
   }
+  if (poolCount) card.appendChild(poolList);
+
+  // 🌐 Web-Funde als Karten
+  if (webHits.length) {
+    card.appendChild(h("div", { class: "section-eyebrow", style: { margin: "16px 0 10px" } }, "🌐 Weitere Funde (Websuche)"));
+    const webList = h("div", { class: "reco-list" });
+    webHits.forEach((w) => webList.appendChild(webCard(w)));
+    card.appendChild(webList);
+  }
+
+  // Letzter Fallback: nichts geparst -> formatierten Text zeigen
+  if (!poolCount && !webHits.length) {
+    card.appendChild(h("div", { class: "agent-text", html: formatAgentText(text) }));
+  }
+
   container.appendChild(card);
 }
 function renderFallback(container, query) {

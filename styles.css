@@ -243,6 +243,7 @@ a { color: var(--accent); text-decoration: none; }
   text-align: left; cursor: pointer; letter-spacing: -0.01em;
 }
 .reco-title:hover { color: var(--accent); }
+.reco-reason { font-size: 13px; color: var(--text); margin-top: 6px; line-height: 1.45; }
 .reco-actions { display: flex; gap: 14px; margin-top: 8px; }
 .reco-link {
   background: none; border: none; padding: 0;
