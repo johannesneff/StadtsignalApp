@@ -2,7 +2,7 @@
    In Produktion käme das aus echten Feeds (FHWS/JMU ICS, Heise RSS, Meetup).
    Für die Demo: kuratierter, realistischer Seed mit echten Würzburger Orten. */
 
-export const INTERESTS = [
+const INTERESTS = [
   { id: "ai", label: "KI / AI", short: "KI", color: "#0a84ff", isMain: true },
   { id: "dev", label: "Web-Entwicklung", short: "Dev", color: "#34c759", isMain: true },
   { id: "data", label: "Data Science", short: "Data", color: "#ff9500", isMain: true },
@@ -17,15 +17,15 @@ export const INTERESTS = [
   { id: "gaming", label: "Gaming", short: "Gaming", color: "#bf5af2", isMain: false },
 ];
 
-export const INTEREST_BY_ID = Object.fromEntries(INTERESTS.map((i) => [i.id, i]));
+const INTEREST_BY_ID = Object.fromEntries(INTERESTS.map((i) => [i.id, i]));
 
 /** Vier Hauptkategorien (matchen die Karten-Marker-Farben). */
-export const MAIN_CATEGORIES = ["ai", "dev", "data", "security"];
+const MAIN_CATEGORIES = ["ai", "dev", "data", "security"];
 
-export function interestColor(id) {
+function interestColor(id) {
   return (INTEREST_BY_ID[id] || {}).color || "#647488";
 }
-export function categoryLabel(id) {
+function categoryLabel(id) {
   return (INTEREST_BY_ID[id] || {}).label || id;
 }
 
@@ -51,7 +51,7 @@ const VENUES = {
   digitalhub: { name: "Digital Hub Mainfranken, Münzstraße 1", lat: 49.7949, lng: 9.9277 },
 };
 
-export const EVENTS = [
+const EVENTS = [
   { id: "e1", title: "KI-Stammtisch Würzburg: LLM-Agenten in Produktion", description: "Praxis-Talks zu LangGraph, Eval-Pipelines und Kosten-Optimierung beim Betrieb von LLM-Agenten.", startsAt: daysAhead(1, 19, 0), venue: "digitalhub", category: "ai", tags: ["ai", "cloud"], url: "https://www.meetup.com/de-DE/wuerzburg-ki/", source: "Meetup" },
   { id: "e2", title: "FHWS Tech Talk: TypeScript-Performance im Monorepo", description: "Wie Skip-Compilation, Project References und Bun den Build großer Frontends halbiert haben.", startsAt: daysAhead(2, 18, 30), venue: "fhws_sandersring", category: "dev", tags: ["dev", "oss"], url: "https://www.thws.de/forschung/", source: "FHWS" },
   { id: "e3", title: "Data Science Meetup: Vector Search ohne Pinecone", description: "pgvector, DuckDB-VSS und Qdrant im Vergleich – live Benchmarks an Würzburger Open-Data.", startsAt: daysAhead(2, 19, 30), venue: "vogel", category: "data", tags: ["data", "ai"], url: "https://www.meetup.com/wuerzburg-data/", source: "Meetup" },
@@ -77,6 +77,6 @@ export const EVENTS = [
   return { ...e, location: v.name, lat: v.lat, lng: v.lng };
 });
 
-export function getEvents() {
+function getEvents() {
   return EVENTS;
 }

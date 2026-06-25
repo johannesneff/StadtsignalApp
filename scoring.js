@@ -1,13 +1,12 @@
 /* Stadtsignal — lokales Agenten-Scoring (Fallback ohne KI-Key).
-   Bewertet Events anhand von aktiven Interessen, Historie und zeitlicher Nähe. */
-
-import { categoryLabel } from "./data.js";
+   Bewertet Events anhand von aktiven Interessen, Historie und zeitlicher Nähe.
+   Nutzt categoryLabel global aus data.js (klassische Scripts). */
 
 const HOUR = 1000 * 60 * 60;
 const DAY = HOUR * 24;
 
 /** Bewertet ein einzelnes Event -> { event, score (0..1), reasons[] }. */
-export function scoreEvent(event, input) {
+function scoreEvent(event, input) {
   const interests = input.interests || [];
   const historyTags = input.historyTags || [];
   const reasons = [];
@@ -48,14 +47,14 @@ export function scoreEvent(event, input) {
 }
 
 /** Bewertet und sortiert alle Events absteigend nach Score. */
-export function scoreAndRank(events, input) {
+function scoreAndRank(events, input) {
   return events
     .map((e) => scoreEvent(e, input))
     .sort((a, b) => b.score - a.score);
 }
 
 /** Aggregiert die Tags aller besuchten Events zu einem Interessen-Profil. */
-export function aggregateHistoryTags(history, events) {
+function aggregateHistoryTags(history, events) {
   const set = new Set();
   for (const id of history) {
     const ev = events.find((e) => e.id === id);

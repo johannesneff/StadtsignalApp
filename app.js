@@ -1,12 +1,13 @@
-/* Stadtsignal — App-Logik (ES-Modul, kein Build).
+/* Stadtsignal — App-Logik (klassisches Script, kein Build).
+   Direkt per Doppelklick auf index.html im Browser öffenbar (file://).
+   Nutzt globale Symbole aus data.js (INTERESTS, EVENTS, interestColor …)
+   und scoring.js (scoreAndRank, aggregateHistoryTags).
    Drei Bereiche: Übersicht (Karte + Kalender) · Scanner (KI-Agent) · Einstellungen. */
 
-import {
-  INTERESTS, INTEREST_BY_ID, EVENTS, interestColor, categoryLabel,
-} from "./data.js";
-import { scoreAndRank, aggregateHistoryTags } from "./scoring.js";
+(function () {
+  "use strict";
 
-const DAY = 1000 * 60 * 60 * 24;
+  const DAY = 1000 * 60 * 60 * 24;
 const WUERZBURG = [49.7913, 9.9534];
 
 /* ---------------------- State ---------------------- */
@@ -219,7 +220,12 @@ async function runScannerSearch(query, thinkingEl, resultsEl, goBtn) {
   try {
     const r = await fetch("/api/agent", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ query, interests: state.interests, history: state.history }),
+      body: JSON.stringify({
+        query,
+        interestLabels: state.interests.map((i) => (INTEREST_BY_ID[i] || {}).label || i),
+        history: state.history,
+        events: EVENTS.map((e) => ({ id: e.id, title: e.title, category: e.category, tags: e.tags, startsAt: e.startsAt, location: e.location, description: e.description })),
+      }),
     });
     if (r.ok) { const d = await r.json(); realText = (d && d.text) ? d.text : null; }
   } catch (e) { /* offline / kein Endpoint */ }
@@ -692,3 +698,4 @@ function init() {
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
 else init();
+})();
