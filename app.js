@@ -694,6 +694,25 @@ function buildTabbar() {
     class: s.fab ? "fab" : "", dataset: { screen: s.id }, "aria-current": "false", "aria-label": s.label, onclick: () => go(s.id) },
     h("span", { class: "ico", html: s.icon }), h("span", {}, s.label))));
 }
+// Echte Events vom Ingestion-Endpunkt laden; ersetzt den Seed in-place.
+// Fällt still auf den kuratierten Seed zurück (offline / file:// / kein Server).
+async function loadLiveEvents() {
+  try {
+    const r = await fetch("/api/events");
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!d || !Array.isArray(d.events) || !d.events.length) return;
+    EVENTS.length = 0;
+    for (const e of d.events) EVENTS.push(e);
+    renderScanner();
+    renderEinstellungen();
+    if (currentScreen === "uebersicht") renderUebersicht();
+    console.info(`Stadtsignal: ${EVENTS.length} echte Events geladen (${d.fetchedAt}).`);
+  } catch (e) {
+    /* Seed bleibt aktiv */
+  }
+}
+
 function init() {
   const mount = $("#screens");
   SCREENS.forEach((s) => { const div = h("div", { class: "screen", id: "screen-" + s.id }); mount.appendChild(div); s.render(); });
@@ -704,6 +723,8 @@ function init() {
     const btn = e.target.closest("[data-visit]");
     if (btn) { toggleVisited(btn.getAttribute("data-visit")); if (map) map.closePopup(); }
   });
+
+  loadLiveEvents();
 }
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

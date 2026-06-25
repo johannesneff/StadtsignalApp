@@ -36,14 +36,16 @@ const MIME = {
 };
 
 const server = http.createServer(async (req, res) => {
-  // --- API: Vercel-Funktion bedienen ---
-  if (req.url.split("?")[0] === "/api/agent") {
+  // --- API: jede Vercel-Funktion unter /api/<name> bedienen ---
+  const apiMatch = req.url.split("?")[0].match(/^\/api\/([a-z0-9_-]+)$/i);
+  if (apiMatch) {
+    const query = Object.fromEntries(new URL(req.url, "http://localhost").searchParams);
     let raw = "";
     for await (const chunk of req) raw += chunk;
     let body = {};
     try { body = raw ? JSON.parse(raw) : {}; } catch { body = {}; }
 
-    const vReq = { method: req.method, body, headers: req.headers };
+    const vReq = { method: req.method, body, query, headers: req.headers };
     const vRes = {
       statusCode: 200,
       status(code) { this.statusCode = code; return this; },
@@ -53,10 +55,10 @@ const server = http.createServer(async (req, res) => {
       },
     };
     try {
-      const mod = await import("./api/agent.js");
+      const mod = await import(`./api/${apiMatch[1]}.js`);
       await mod.default(vReq, vRes);
     } catch (err) {
-      res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
+      res.writeHead(err?.code === "ERR_MODULE_NOT_FOUND" ? 404 : 500, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ error: String(err && err.message ? err.message : err) }));
     }
     return;
