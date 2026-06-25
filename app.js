@@ -336,9 +336,13 @@ function renderUebersicht() {
   destroyMap();
   clear(root);
 
-  const refreshBtn = h("button", { class: "cal-nav", html: I.refresh, "aria-label": "Aktualisieren",
-    onclick: () => { if (overviewTab === "karte") refreshMapData(); } });
-  root.appendChild(header("Übersicht", "Karte & Kalender", overviewTab === "karte" ? refreshBtn : null));
+  const refreshBtn = h("button", { class: "cal-nav", html: I.refresh, "aria-label": "Events neu abrufen",
+    onclick: (e) => {
+      const btn = e.currentTarget;
+      btn.style.opacity = "0.5";
+      loadLiveEvents(true).finally(() => { if (btn) btn.style.opacity = ""; });
+    } });
+  root.appendChild(header("Übersicht", "Karte & Kalender", refreshBtn));
 
   const body = h("div", { class: "screen-body" });
   body.appendChild(h("div", { style: { display: "flex", justifyContent: "center" } },
@@ -696,20 +700,23 @@ function buildTabbar() {
 }
 // Echte Events vom Ingestion-Endpunkt laden; ersetzt den Seed in-place.
 // Fällt still auf den kuratierten Seed zurück (offline / file:// / kein Server).
-async function loadLiveEvents() {
+let lastEventsFetch = 0;
+async function loadLiveEvents(force) {
   try {
-    const r = await fetch("/api/events");
-    if (!r.ok) return;
+    const r = await fetch("/api/events" + (force ? "?refresh=1" : ""));
+    if (!r.ok) return false;
     const d = await r.json();
-    if (!d || !Array.isArray(d.events) || !d.events.length) return;
+    if (!d || !Array.isArray(d.events) || !d.events.length) return false;
     EVENTS.length = 0;
     for (const e of d.events) EVENTS.push(e);
+    lastEventsFetch = Date.now();
     renderScanner();
     renderEinstellungen();
     if (currentScreen === "uebersicht") renderUebersicht();
-    console.info(`Stadtsignal: ${EVENTS.length} echte Events geladen (${d.fetchedAt}).`);
+    console.info(`Stadtsignal: ${EVENTS.length} echte Events ${d.cached ? "(Cache)" : "(frisch abgefragt)"} – ${d.fetchedAt}.`);
+    return true;
   } catch (e) {
-    /* Seed bleibt aktiv */
+    return false; /* Seed bleibt aktiv */
   }
 }
 
