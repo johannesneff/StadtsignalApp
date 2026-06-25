@@ -247,7 +247,7 @@ async function runScannerSearch(query, thinkingEl, resultsEl, goBtn) {
   // Mindestdauer für die Thinking-Animation, damit sie sichtbar ist.
   if (!reduced) await new Promise((res) => setTimeout(res, steps.length * 400 + 150));
   clear(resultsEl);
-  if (realText) renderAgentAnswer(resultsEl, realText, "KI · Claude Haiku");
+  if (realText) renderAgentAnswer(resultsEl, realText, "KI · Gemini");
   else renderFallback(resultsEl, query);
   if (goBtn) goBtn.disabled = false;
 }

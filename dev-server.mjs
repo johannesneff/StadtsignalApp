@@ -78,7 +78,8 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  const agent = process.env.ANTHROPIC_API_KEY ? "aktiv (Claude Haiku)" : "Fallback – kein ANTHROPIC_API_KEY";
+  const hasKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  const agent = hasKey ? "aktiv (Google Gemini)" : "Fallback – kein GEMINI_API_KEY";
   console.log(`\n  Stadtsignal: http://localhost:${PORT}`);
   console.log(`  Agent: ${agent}\n`);
 });

@@ -15,11 +15,12 @@ Apple-minimalistisches, helles UI. **Hybrid-Architektur:** statisches Frontend
 
 Profil, Interessen, Historie und Notizen liegen im `localStorage`.
 
-## KI-Agent (kostenbewusst)
+## KI-Agent (kostenlos)
 
-- Modell: **Claude Haiku** (`claude-haiku-4-5`) über die Serverless-Funktion [`api/agent.js`](api/agent.js).
-- Sparmaßnahmen: kleines `max_tokens`, **Prompt-Caching** für System-Prompt + Event-Pool, nur die aktuelle Frage wird gesendet, und der Agent wird **nur bei aktiver Nutzer-Anfrage** aufgerufen (Empfehlungen laufen lokal).
-- **Fallback:** Ohne `ANTHROPIC_API_KEY` (oder lokal ohne Funktions-Server) fällt der Scanner automatisch auf die lokale Scoring-Empfehlung zurück – die App funktioniert also überall.
+- Modell: **Google Gemini** (`gemini-2.5-flash`, kostenloser AI-Studio Free-Tier) über die Serverless-Funktion [`api/agent.js`](api/agent.js) – per REST/`fetch`, **ohne SDK**.
+- Sparmaßnahmen: schnelles „flash"-Modell, kleines `maxOutputTokens`, nur die aktuelle Frage wird gesendet, und der Agent wird **nur bei aktiver Nutzer-Anfrage** aufgerufen (Empfehlungen laufen lokal).
+- **Fallback:** Ohne `GEMINI_API_KEY` (oder lokal ohne Funktions-Server) fällt der Scanner automatisch auf die lokale Scoring-Empfehlung zurück – die App funktioniert also überall.
+- Modell per `GEMINI_MODEL` umstellbar (z. B. `gemini-2.5-flash-lite`).
 
 ## Technik
 
@@ -51,19 +52,19 @@ python3 -m http.server 4321
 # dann http://127.0.0.1:4321 öffnen
 ```
 
-Mit echtem Agent lokal (benötigt Node + Vercel CLI):
+Mit echtem Agent lokal (benötigt Node, kein Vercel-Konto):
 
 ```bash
 npm install
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
-vercel dev
+echo "GEMINI_API_KEY=..." > .env   # Key: https://aistudio.google.com/apikey
+npm run dev                          # http://localhost:5173
 ```
 
 ## Deployment (Vercel)
 
 1. Repo zu GitHub pushen und in Vercel importieren **oder** `vercel` per CLI ausführen.
 2. Kein Build nötig (Framework: „Other"); statische Dateien + `api/` werden automatisch erkannt.
-3. In **Project Settings → Environment Variables** `ANTHROPIC_API_KEY` setzen.
+3. In **Project Settings → Environment Variables** `GEMINI_API_KEY` setzen.
 4. Deployen – fertig. Ohne Key läuft die App weiter, nur der Scanner nutzt dann den lokalen Fallback.
 
 ## Nächste Schritte

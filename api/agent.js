@@ -1,18 +1,17 @@
 // Stadtsignal — Agent-Endpoint (Vercel Serverless Function, Node).
-// Schlanker, kostenbewusster Aufruf von Claude Haiku:
-//   - kleines max_tokens
-//   - Prompt-Caching für System-Prompt + Event-Pool (günstige Folge-Requests)
+// Nutzt Google Gemini (AI Studio, kostenloser Free-Tier) über die REST-API
+// per fetch – kein SDK nötig (Node 18+/Vercel haben fetch eingebaut).
+//
+// Kostenbewusst:
+//   - schnelles "flash"-Modell, kleines maxOutputTokens
+//   - stabiler System-Prompt (implizites Caching der 2.5-Modelle)
 //   - nur die aktuelle Frage wird gesendet (keine lange Chat-Historie)
-//   - kein Thinking (günstigste Variante)
-// Die Event-Daten kommen aus dem Request-Body (vom Frontend) – so ist die
-// Funktion komplett von data.js entkoppelt und das Frontend bleibt ein
-// klassisches, direkt im Browser öffenbares Script.
-// Ohne ANTHROPIC_API_KEY antwortet die Funktion mit 503 -> das Frontend
-// fällt automatisch auf die lokale Scoring-Empfehlung zurück.
+//   - Event-Daten kommen aus dem Request-Body -> Funktion ist von data.js entkoppelt
+//
+// Ohne GEMINI_API_KEY antwortet die Funktion mit 503 -> das Frontend fällt
+// automatisch auf die lokale Scoring-Empfehlung zurück.
 
-import Anthropic from "@anthropic-ai/sdk";
-
-const MODEL = "claude-haiku-4-5";
+const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_TOKENS = 600;
 
 const FORMAT = `Du bist der „Stadtsignal"-Tech-Radar-Agent für die Würzburger IT-Community.
@@ -57,9 +56,9 @@ export default async function handler(req, res) {
     return;
   }
 
-  const key = process.env.ANTHROPIC_API_KEY;
+  const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (!key) {
-    res.status(503).json({ error: "ANTHROPIC_API_KEY nicht gesetzt" });
+    res.status(503).json({ error: "GEMINI_API_KEY nicht gesetzt" });
     return;
   }
 
@@ -74,40 +73,52 @@ export default async function handler(req, res) {
   const history = Array.isArray(body.history) ? body.history.slice(0, 30) : [];
   const events = Array.isArray(body.events) ? body.events.slice(0, 60) : [];
 
-  if (!query.trim()) {
-    res.status(400).json({ error: "Leere Anfrage" });
-    return;
-  }
-  if (!events.length) {
-    res.status(400).json({ error: "Kein Event-Pool übergeben" });
-    return;
-  }
+  if (!query.trim()) { res.status(400).json({ error: "Leere Anfrage" }); return; }
+  if (!events.length) { res.status(400).json({ error: "Kein Event-Pool übergeben" }); return; }
 
-  // Stabiler Prefix (Format + Event-Pool) -> gecacht. Volatile Frage in messages.
   const systemText = `${FORMAT}\n\nEVENT-POOL:\n${buildEventPool(events)}`;
   const userMessage =
     `Aktive Interessen: ${interestLabels.join(", ") || "(keine)"}.\n` +
     `Besuchte Event-IDs: ${history.length ? history.join(", ") : "(keine)"}.\n\n` +
     `Frage: ${query}`;
 
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+
   try {
-    const client = new Anthropic({ apiKey: key });
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system: [{ type: "text", text: systemText, cache_control: { type: "ephemeral" } }],
-      messages: [{ role: "user", content: userMessage }],
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemText }] },
+        contents: [{ role: "user", parts: [{ text: userMessage }] }],
+        generationConfig: {
+          maxOutputTokens: MAX_TOKENS,
+          temperature: 0.5,
+          // Thinking aus: sonst frisst es bei 2.5-flash das Token-Budget -> leere Antwort.
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      }),
     });
 
-    const text = response.content
-      .filter((b) => b.type === "text")
-      .map((b) => b.text)
-      .join("\n")
+    if (!r.ok) {
+      const detail = await r.text().catch(() => "");
+      res.status(r.status).json({ error: `Gemini-Fehler (${r.status})`, detail: detail.slice(0, 300) });
+      return;
+    }
+
+    const data = await r.json();
+    const text = (data?.candidates?.[0]?.content?.parts || [])
+      .map((p) => p.text || "")
+      .join("")
       .trim();
 
-    res.status(200).json({ text, model: MODEL, usage: response.usage });
+    if (!text) {
+      res.status(502).json({ error: "Leere Antwort von Gemini", reason: data?.candidates?.[0]?.finishReason || null });
+      return;
+    }
+
+    res.status(200).json({ text, model: MODEL, usage: data?.usageMetadata || null });
   } catch (err) {
-    const status = err?.status || 500;
-    res.status(status).json({ error: err?.message || "Agent-Fehler" });
+    res.status(500).json({ error: err?.message || "Agent-Fehler" });
   }
 }
