@@ -35,6 +35,13 @@ function isOnline(text) {
   return /\bonline\b|\bwebinar\b|\bzoom\b|virtuell|livestream|live-stream|\bremote\b|ms teams|microsoft teams|\bwebex\b|videokonferenz|per video|digital teilnehmen/.test(t);
 }
 
+// Klar fachfremde Themen (Kultur/Sozial/Recht/Religion …) — gilt für ALLE Quellen,
+// auch die kuratierten (eine AI-Week-/Meetup-Quelle kann mal etwas Themenfremdes haben).
+function nonTech(text) {
+  const t = (text || "").toLowerCase();
+  return /\bgewalt\b|geschlechterverh|vernissage|ausstellung|\blesung\b|\bkonzert\b|gottesdienst|\btheater\b|\byoga\b|achtsamkeit|psychotherap|seelsorge|\bchor\b|\bmusical\b|tanzabend|geschlechtergerecht|migration\b|\bpflege\b|\bsenioren\b/.test(t);
+}
+
 const WUE = [49.7913, 9.9534];
 const VENUE_COORDS = [
   [/digital hub|münzstr/i, 49.7949, 9.9277],
@@ -78,9 +85,11 @@ function parseDt(prop) {
 
 function categorize(text) {
   const t = text.toLowerCase();
-  if (/security|owasp|cyber|ransomware|threat|pentest|hacking|sicherheit/.test(t)) return "security";
+  // Datenschutz/DSGVO ist KEINE Data Science, sondern Privacy/Security.
+  if (/datenschutz|dsgvo|\bgdpr\b|privacy/.test(t)) return "security";
+  if (/security|owasp|cyber|ransomware|threat|pentest|hacking|it-sicherheit/.test(t)) return "security";
   if (/\bki\b|\bai\b|\bllm\b|machine learning|deep learning|gpt|gen.?ai|künstliche intelligenz|neural|prompt/.test(t)) return "ai";
-  if (/data|analytics|\bsql\b|warehouse|pandas|polars|tracking|dashboard|datenbank|bi\b/.test(t)) return "data";
+  if (/data scien|\banalytics\b|\bsql\b|warehouse|pandas|polars|\btracking\b|dashboard|datenbank|big data|business intelligence|data engineer/.test(t)) return "data";
   return "dev";
 }
 function tagsFor(text, category) {
@@ -90,7 +99,7 @@ function tagsFor(text, category) {
   if (/\bux\b|\bui\b|design|usability|figma/.test(t)) tags.add("ux");
   if (/mobile|android|\bios\b|flutter|react native/.test(t)) tags.add("mobile");
   if (/open.?source|\boss\b|github/.test(t)) tags.add("oss");
-  if (/startup|gründ|founder|pitch|venture/.test(t)) tags.add("startup");
+  if (/startup|gründung|gründer|gegründet|co-?founder|\bfounder\b|pitch[- ]?night|\bventure\b|accelerator|inkubator/.test(t)) tags.add("startup");
   if (/robot|\bros\b/.test(t)) tags.add("robotics");
   if (/blockchain|web3|crypto|ethereum/.test(t)) tags.add("blockchain");
   if (/\bgame|gaming|godot|unity/.test(t)) tags.add("gaming");
@@ -415,7 +424,7 @@ export default async function handler(req, res) {
     const end = e.endsAt ? new Date(e.endsAt).getTime() : new Date(e.startsAt).getTime() + HOURS3;
     return end >= now;
   };
-  events = dedupe(events.filter(notEnded))
+  events = dedupe(events.filter(notEnded).filter((e) => !nonTech(e.title)))
     .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
 
   // Anreicherung best-effort: exakte Pins, geprüfte Links, Event-Bilder.
