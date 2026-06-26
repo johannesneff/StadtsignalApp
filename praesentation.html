@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Stadtsignal — Präsentation</title>
+<style>
+  :root{
+    --accent:#0a84ff; --accent-weak:#e8f1ff;
+    --bg:#f5f5f7; --surface:#ffffff; --ink:#1d1d1f; --ink2:#6e6e73; --ink3:#a1a1a6;
+    --line:#e3e3e6; --radius:24px;
+    --ai:#0a84ff; --dev:#34c759; --data:#ff9500; --sec:#ff3b30; --startup:#ffcc00; --cloud:#30b0c7;
+    --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:var(--font); color:var(--ink);
+    background:
+      radial-gradient(1200px 600px at 85% -10%, #eef4ff 0%, rgba(238,244,255,0) 60%),
+      radial-gradient(1000px 700px at -10% 110%, #fff6ec 0%, rgba(255,246,236,0) 55%),
+      var(--bg);
+    -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+
+  .deck{height:100vh; display:flex; flex-direction:column}
+
+  /* top bar */
+  .topbar{display:flex; align-items:center; gap:12px; padding:16px 28px}
+  .wordmark{display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:-.02em; font-size:17px}
+  .wordmark .logo{width:30px;height:30px;border-radius:50%;background:var(--accent);display:grid;place-items:center}
+  .wordmark .logo svg{width:18px;height:18px}
+  .topbar .spacer{flex:1}
+  .counter{font-variant-numeric:tabular-nums; color:var(--ink2); font-size:14px; font-weight:600}
+
+  /* stage */
+  .stage{flex:1; display:grid; grid-template-columns:1fr 430px; gap:34px; padding:6px 40px 24px;
+         max-width:1400px; width:100%; margin:0 auto; min-height:0}
+
+  /* slides column */
+  .panel{position:relative; min-height:0}
+  .slide{position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; gap:18px;
+         opacity:0; transform:translateY(14px); pointer-events:none;
+         transition:opacity .45s ease, transform .45s ease; padding-right:6px; overflow:auto}
+  .slide.active{opacity:1; transform:none; pointer-events:auto}
+  .eyebrow{display:inline-flex; align-items:center; gap:9px; font-size:13px; font-weight:700; letter-spacing:.08em;
+           text-transform:uppercase; color:var(--accent)}
+  .eyebrow .num{display:grid;place-items:center; width:24px;height:24px;border-radius:50%;
+                background:var(--accent-weak); color:var(--accent); font-size:12px}
+  h1{font-size:40px; line-height:1.05; letter-spacing:-.03em; font-weight:700}
+  h2{font-size:33px; line-height:1.08; letter-spacing:-.025em; font-weight:700}
+  .lead{font-size:18px; line-height:1.5; color:var(--ink2); max-width:60ch}
+  .hl{color:var(--ink); font-weight:600}
+  .accent{color:var(--accent)}
+
+  .cover h1{font-size:64px}
+  .cover .tag{font-size:22px; color:var(--ink2); font-weight:500; margin-top:4px}
+  .pill{display:inline-flex;align-items:center;gap:8px; background:var(--surface); border:1px solid var(--line);
+        border-radius:980px; padding:8px 15px; font-size:14px; font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.03)}
+
+  ul.points{display:flex; flex-direction:column; gap:13px; list-style:none}
+  ul.points li{display:flex; gap:13px; align-items:flex-start; font-size:17px; line-height:1.45}
+  ul.points li .ic{flex:0 0 26px; width:26px;height:26px;border-radius:8px; display:grid;place-items:center;
+                   background:var(--accent-weak); color:var(--accent); margin-top:1px}
+  ul.points li .ic svg{width:16px;height:16px}
+  ul.points li b{font-weight:650}
+  ul.points li small{display:block; color:var(--ink2); font-size:14.5px; font-weight:400; margin-top:2px; line-height:1.4}
+
+  .cards{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:16px 18px;
+        box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .card .k{font-size:13px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--ink2)}
+  .card .v{font-size:15.5px; margin-top:6px; line-height:1.45}
+  .card .v b{font-weight:650}
+
+  .chips{display:flex; flex-wrap:wrap; gap:9px}
+  .chip{display:inline-flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--line);
+        border-radius:980px; padding:7px 13px; font-size:13.5px; font-weight:600}
+  .chip .dot{width:9px;height:9px;border-radius:50%}
+
+  .flow{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:2px}
+  .flow .step{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:10px 14px;
+              font-size:14px; font-weight:600; line-height:1.2}
+  .flow .step small{display:block; font-weight:400; color:var(--ink2); font-size:12.5px}
+  .flow .arr{color:var(--ink3); font-size:18px}
+
+  .persona{display:flex; gap:12px; align-items:center; background:var(--surface); border:1px solid var(--line);
+           border-radius:16px; padding:12px 15px}
+  .persona .av{width:40px;height:40px;border-radius:50%; display:grid;place-items:center; color:#fff; font-weight:700; flex:0 0 40px}
+  .persona .q{font-size:14.5px; line-height:1.4} .persona .q b{font-weight:650}
+  .persona .q small{color:var(--ink2)}
+
+  /* device column */
+  .device-wrap{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; min-height:0}
+  .device-label{display:flex;align-items:center;gap:8px; font-size:12.5px; font-weight:700; letter-spacing:.06em;
+                text-transform:uppercase; color:var(--ink2)}
+  .device-label .live{display:inline-flex;align-items:center;gap:6px; color:#1c7a3d}
+  .device-label .live .blink{width:8px;height:8px;border-radius:50%;background:#34c759; animation:blink 1.6s infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+  .phone{
+    position:relative; height:min(760px,80vh); aspect-ratio:360/740;
+    background:#0b0b0d; border-radius:46px; padding:11px;
+    box-shadow:0 30px 70px rgba(0,0,0,.28), 0 2px 0 rgba(255,255,255,.4) inset;
+  }
+  .phone::after{content:""; position:absolute; top:16px; left:50%; transform:translateX(-50%);
+                width:120px; height:26px; background:#0b0b0d; border-radius:0 0 16px 16px; z-index:3}
+  .phone .screen{width:100%; height:100%; border-radius:36px; overflow:hidden; background:#fff; position:relative}
+  .phone iframe{width:100%; height:100%; border:0; display:block}
+  .hint{font-size:12.5px; color:var(--ink3)}
+
+  /* controls */
+  .controls{display:flex; align-items:center; justify-content:center; gap:18px; padding:6px 0 20px}
+  .nav{width:46px;height:46px;border-radius:50%; border:1px solid var(--line); background:var(--surface);
+       display:grid;place-items:center; cursor:pointer; color:var(--ink); transition:transform .12s ease, background .15s}
+  .nav:hover{background:#fafafa} .nav:active{transform:scale(.94)}
+  .nav:disabled{opacity:.35; cursor:default}
+  .nav svg{width:20px;height:20px}
+  .dots{display:flex; gap:9px}
+  .dot{width:9px;height:9px;border-radius:50%; background:var(--line); cursor:pointer; transition:all .25s}
+  .dot.active{background:var(--accent); width:26px; border-radius:980px}
+
+  @media (max-width:1080px){
+    .stage{grid-template-columns:1fr; }
+    .device-wrap{display:none}
+    h1{font-size:34px} .cover h1{font-size:48px}
+  }
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="topbar">
+    <div class="wordmark">
+      <span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><path d="M4.9 19.1a10 10 0 0 1 0-14.2M7.8 16.2a6 6 0 0 1 0-8.4M19.1 4.9a10 10 0 0 1 0 14.2M16.2 7.8a6 6 0 0 1 0 8.4"/><circle cx="12" cy="12" r="1.6" fill="#fff" stroke="none"/></svg></span>
+      Stadtsignal
+    </div>
+    <div class="spacer"></div>
+    <div class="counter"><span id="cur">1</span> / <span id="tot">6</span></div>
+  </div>
+
+  <div class="stage">
+    <!-- SLIDES -->
+    <div class="panel" id="panel">
+
+      <!-- 1 — Cover -->
+      <section class="slide cover active">
+        <div class="eyebrow"><span class="num">★</span> KI-Tech-Event-Radar</div>
+        <h1>Stadtsignal</h1>
+        <div class="tag">Dein KI-Radar für Tech-Events in <span class="accent">Würzburg &amp; Mainfranken</span>.</div>
+        <p class="lead" style="margin-top:8px">Ein Satz in natürlicher Sprache rein — <span class="hl">echte, geprüfte, zu dir passende Events</span> raus. Keine Halluzinationen, keine Sucherei.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+          <span class="pill">🗺️ Karte &amp; Kalender</span>
+          <span class="pill">🤖 KI-Agent (Scanner)</span>
+          <span class="pill">✉️ Persönlicher Newsletter</span>
+        </div>
+      </section>
+
+      <!-- 2 — Nützlichkeit & Zielgruppen-Fit -->
+      <section class="slide">
+        <div class="eyebrow"><span class="num">1</span> Nützlichkeit &amp; Zielgruppen-Fit</div>
+        <h2>Ein Ort statt zehn Tabs.</h2>
+        <p class="lead"><b class="hl">Best Selling Point:</b> Frag „Was läuft diese Woche für mich?“ — der Agent liefert <span class="accent">kuratierte, real existierende</span> Tech-Events, begründet mit „weil …“.</p>
+        <ul class="points">
+          <li><span class="ic">✓</span><div><b>Verstreute Quellen vereint.</b><small>Meetup, Uni, ZDI, AI Week, Instagram-Posts … alles an einer Stelle, gefiltert &amp; aktuell.</small></div></li>
+          <li><span class="ic">✓</span><div><b>Schluss mit „selber suchen“.</b><small>Personalisierte Auswahl in Sekunden statt 30 Min. Recherche — gegen FOMO &amp; Zeitmangel.</small></div></li>
+          <li><span class="ic">✓</span><div><b>Vertrauen statt Halluzination.</b><small>Jeder Link wird serverseitig geprüft; nur belegte Events werden gezeigt.</small></div></li>
+        </ul>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:2px">
+          <div class="persona"><div class="av" style="background:#0a84ff">L</div><div class="q"><b>Lena, 23 · neu in der Stadt</b><br><small>„Wo treffe ich diese Woche KI-Leute?“</small></div></div>
+          <div class="persona"><div class="av" style="background:#34c759">M</div><div class="q"><b>Markus, 41 · Gründer</b><br><small>„Einsteiger-KI nach Feierabend, vor Ort.“</small></div></div>
+        </div>
+      </section>
+
+      <!-- 3 — Nutzererlebnis & Zugänglichkeit -->
+      <section class="slide">
+        <div class="eyebrow"><span class="num">2</span> Nutzererlebnis &amp; Zugänglichkeit</div>
+        <h2>Überall offen. Sofort nutzbar.</h2>
+        <ul class="points">
+          <li><span class="ic">↗</span><div><b>Null Hürden.</b><small>Kein Login, kein Account, keine Installation — läuft im Browser, sogar per Doppelklick auf die Datei.</small></div></li>
+          <li><span class="ic">🔒</span><div><b>Privatsphäre zuerst.</b><small>Profil, Interessen &amp; Verlauf liegen nur lokal (localStorage) — keine Mail-/Kalender-Zugriffe nötig.</small></div></li>
+          <li><span class="ic">✨</span><div><b>Sichtbare Personalisierung.</b><small>Die „weil …“-Begründung zeigt, <i>warum</i> ein Event passt — aus Interessen, Suchverlauf &amp; Besuchen.</small></div></li>
+          <li><span class="ic">📲</span><div><b>Vom Fund zur Tat.</b><small>„In Kalender“ (.ics) &amp; echter E-Mail-Newsletter im selben Layout wie die Vorschau.</small></div></li>
+        </ul>
+        <div class="pill" style="align-self:flex-start">Tipp: Klick rechts live durch die App →</div>
+      </section>
+
+      <!-- 4 — UX, Design & Usability -->
+      <section class="slide">
+        <div class="eyebrow"><span class="num">3</span> UX, Design &amp; Usability</div>
+        <h2>Apple-ruhig. Bewusst reduziert.</h2>
+        <div class="cards">
+          <div class="card"><div class="k">Visuelle Sprache</div><div class="v">Hell, viel Weißraum, <b>ein</b> Akzent-Blau, System-Schrift. Konsistente Formen, Farben &amp; Typo.</div></div>
+          <div class="card"><div class="k">Mobile-first</div><div class="v">Responsive bis 375 px; keine Text-Überschneidungen; Karte mit <b>Tages-Heatmap</b>.</div></div>
+          <div class="card"><div class="k">Frag statt Formular</div><div class="v">Der Agent liest <b>Zeit, Level, Format</b> aus der Frage — keine Einstellungs-Wand vor dem Nutzen.</div></div>
+          <div class="card"><div class="k">Ehrlichkeit als UI</div><div class="v">„✓ Link geprüft“, „keine Verortung möglich“, Quellen-Angabe — Vertrauen sichtbar gemacht.</div></div>
+        </div>
+        <p class="lead" style="font-size:16px">Drei klare Bereiche per Bottom-Navigation: <span class="hl">Übersicht</span> · <span class="hl">Scanner</span> (KI, im Zentrum) · <span class="hl">Einstellungen</span>.</p>
+      </section>
+
+      <!-- 5 — Technische Umsetzung -->
+      <section class="slide">
+        <div class="eyebrow"><span class="num">4</span> Technische Umsetzung</div>
+        <h2>Statisch + serverlos. Echte Daten.</h2>
+        <p class="lead" style="font-size:16px"><b class="hl">Architektur:</b> statisches Frontend (kein Build, file://-fähig) + schlanke Serverless-Funktionen auf Vercel. Keine Datenbank, keine Accounts.</p>
+
+        <div style="font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink2)">Feste Event-Quellen (live abgerufen)</div>
+        <div class="chips">
+          <span class="chip"><span class="dot" style="background:var(--data)"></span>Meetup · DATA &amp; ANALYTICS</span>
+          <span class="chip"><span class="dot" style="background:var(--data)"></span>Analytics Pioneers</span>
+          <span class="chip"><span class="dot" style="background:var(--dev)"></span>Modern Software Dev</span>
+          <span class="chip"><span class="dot" style="background:var(--ai)"></span>Deep Learning</span>
+          <span class="chip"><span class="dot" style="background:var(--ai)"></span>WUE.tech</span>
+          <span class="chip"><span class="dot" style="background:var(--startup)"></span>ZDI / Gründerzentren</span>
+          <span class="chip"><span class="dot" style="background:var(--ai)"></span>AI Week Mainfranken</span>
+          <span class="chip"><span class="dot" style="background:var(--dev)"></span>FRIZZ Würzburg</span>
+          <span class="chip"><span class="dot" style="background:var(--sec)"></span>Uni Würzburg</span>
+        </div>
+
+        <div class="flow">
+          <div class="step">Ingestion<small>iCal · RSS · JSON</small></div><span class="arr">→</span>
+          <div class="step">Aufbereiten<small>Dedupe · Geocoding · og:Bild · Tech-Filter</small></div><span class="arr">→</span>
+          <div class="step">KI-Agent<small>Gemini + Websuche, Links geprüft</small></div><span class="arr">→</span>
+          <div class="step">Du<small>„weil …“-Treffer</small></div>
+        </div>
+        <ul class="points" style="margin-top:2px">
+          <li><span class="ic">🤖</span><div><b>Agent-Logik:</b> Google Gemini gewichtet Interessen/Verlauf, leitet Filter aus der Frage ab, verifiziert Web-Funde serverseitig &amp; sortiert echte Quellen-Events oben. <small>Ohne KI-Key: lokales Scoring als Fallback — läuft überall.</small></div></li>
+        </ul>
+      </section>
+
+      <!-- 6 — Ausblick -->
+      <section class="slide">
+        <div class="eyebrow"><span class="num">5</span> Ausblick</div>
+        <h2>Vom Radar zum Scene-Builder.</h2>
+        <ul class="points">
+          <li><span class="ic">⚡</span><div><b>Proaktiver Agent.</b><small>Meldet sich selbst: „Donnerstag passt zu dir — 3 Bekannte gehen hin.“</small></div></li>
+          <li><span class="ic">➕</span><div><b>Mehr Quellen.</b><small>Weitere Meetups/Luma &amp; Firmen-Termine (THWS/CAIRO, IHK, Flyeralarm, Vogel, s.Oliver, msg …).</small></div></li>
+          <li><span class="ic">✉️</span><div><b>Automatischer Newsletter.</b><small>Echter wiederkehrender Versand (Cron + Abo) statt nur auf Knopfdruck.</small></div></li>
+          <li><span class="ic">🏛️</span><div><b>Angebotsseite.</b><small>Veranstalter-/Stadt-Dashboard: „dein Event erreichte 47 passende Leute“ → Mainfrankens Tech-Connector.</small></div></li>
+        </ul>
+        <div class="pill" style="align-self:flex-start;background:var(--accent);color:#fff;border-color:var(--accent)">Stadtsignal — finde, was diese Woche für dich läuft.</div>
+      </section>
+
+    </div>
+
+    <!-- DEVICE (persistent — once loaded) -->
+    <div class="device-wrap">
+      <div class="device-label"><span class="live"><span class="blink"></span>Live-Prototyp</span> · mobil · interaktiv</div>
+      <div class="phone"><div class="screen">
+        <iframe id="app" src="./index.html?demo=1" title="Stadtsignal Prototyp" loading="eager"></iframe>
+      </div></div>
+      <div class="hint">Du kannst direkt im Fenster tippen &amp; klicken.</div>
+    </div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="controls">
+    <button class="nav" id="prev" aria-label="Zurück"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <div class="dots" id="dots"></div>
+    <button class="nav" id="next" aria-label="Weiter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+  </div>
+</div>
+
+<script>
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var i = 0, n = slides.length;
+  var dotsEl = document.getElementById('dots');
+  var prev = document.getElementById('prev'), next = document.getElementById('next');
+  document.getElementById('tot').textContent = n;
+  slides.forEach(function(_, k){
+    var d = document.createElement('div'); d.className='dot'+(k===0?' active':'');
+    d.addEventListener('click', function(){ go(k); });
+    dotsEl.appendChild(d);
+  });
+  var dots = Array.prototype.slice.call(dotsEl.children);
+  function go(k){
+    i = Math.max(0, Math.min(n-1, k));
+    slides.forEach(function(s,x){ s.classList.toggle('active', x===i); });
+    dots.forEach(function(d,x){ d.classList.toggle('active', x===i); });
+    document.getElementById('cur').textContent = i+1;
+    prev.disabled = i===0; next.disabled = i===n-1;
+  }
+  prev.addEventListener('click', function(){ go(i-1); });
+  next.addEventListener('click', function(){ go(i+1); });
+  document.addEventListener('keydown', function(e){
+    if(e.key==='ArrowRight' || e.key===' ' || e.key==='PageDown'){ e.preventDefault(); go(i+1); }
+    else if(e.key==='ArrowLeft' || e.key==='PageUp'){ e.preventDefault(); go(i-1); }
+    else if(e.key==='Home'){ go(0); } else if(e.key==='End'){ go(n-1); }
+  });
+  go(0);
+</script>
+</body>
+</html>
