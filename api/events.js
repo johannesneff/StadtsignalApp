@@ -9,11 +9,13 @@
 
 // --- Quellen (iCal). techOnly=true filtert breite Kalender auf Tech-Events. ---
 const ICAL_SOURCES = [
-  { name: "Meetup · DATA & ANALYTICS", url: "https://www.meetup.com/wurzburg-data-analytics-meetup/events/ical/" },
-  { name: "Meetup · Analytics Pioneers", url: "https://www.meetup.com/analytics-pioneers-wurzburg/events/ical/" },
-  { name: "Meetup · Modern Software Dev", url: "https://www.meetup.com/wuerzburg-software-development/events/ical/" },
-  { name: "Meetup · Deep Learning", url: "https://www.meetup.com/Wurzburg-Deep-Learning-Meetup/events/ical/" },
-  { name: "FRIZZ Würzburg", url: "https://frizz-wuerzburg.de/search/event/veranstaltungskalender/calendar.ics", techOnly: true },
+  { name: "Meetup · DATA & ANALYTICS", url: "https://www.meetup.com/wurzburg-data-analytics-meetup/events/ical/", home: "https://www.meetup.com/wurzburg-data-analytics-meetup/" },
+  { name: "Meetup · Analytics Pioneers", url: "https://www.meetup.com/analytics-pioneers-wurzburg/events/ical/", home: "https://www.meetup.com/analytics-pioneers-wurzburg/" },
+  { name: "Meetup · Modern Software Dev", url: "https://www.meetup.com/wuerzburg-software-development/events/ical/", home: "https://www.meetup.com/wuerzburg-software-development/" },
+  { name: "Meetup · Deep Learning", url: "https://www.meetup.com/Wurzburg-Deep-Learning-Meetup/events/ical/", home: "https://www.meetup.com/Wurzburg-Deep-Learning-Meetup/" },
+  { name: "Meetup · WUE.tech", url: "https://www.meetup.com/wue-tech/events/ical/", home: "https://www.meetup.com/wue-tech/" },
+  { name: "ZDI / Gründerzentren Würzburg", url: "https://cloud.gruenderzentren-wuerzburg.de/remote.php/dav/public-calendars/Q3f96zZ9Dgd7seFb?export", home: "https://www.gruenderzentren-wuerzburg.de/gruenderzentren/veranstaltungen/index.html", techOnly: true },
+  { name: "FRIZZ Würzburg", url: "https://frizz-wuerzburg.de/search/event/veranstaltungskalender/calendar.ics", techOnly: true, home: "https://frizz-wuerzburg.de/" },
 ];
 
 // --- Quellen (RSS), z. B. TYPO3-Veranstaltungs-Feeds. ---
@@ -26,7 +28,7 @@ const RSS_SOURCES = [
 // Tech-Begriffe statt zu breiter Wörter wie „digital", „web", „Entwicklung").
 function techRelevant(text) {
   const t = (text || "").toLowerCase();
-  return /\bk[iü]\b|künstliche intelligenz|\bai\b|\bllm\b|machine learning|deep learning|data scien|data engineer|big data|\banalytics\b|softwareentwickl|software-entwickl|programmier|\bcoding\b|\bpython\b|javascript|typescript|web[- ]?entwickl|frontend|backend|full[- ]?stack|\bdevops\b|\bcloud\b|kubernetes|\bcyber|it-sicherheit|hacking|pentest|robotik|\brobot|hackathon|\bux\b|\bui\b|\bapi\b|open[- ]?source|blockchain|tech[- ]?talk|tech[- ]?meetup|informatik/.test(t);
+  return /\bk[iü]\b|künstliche intelligenz|\bai\b|\bllm\b|machine learning|deep learning|data scien|data engineer|big data|\banalytics\b|softwareentwickl|software-entwickl|programmier|\bcoding\b|\bpython\b|javascript|typescript|web[- ]?entwickl|frontend|backend|full[- ]?stack|\bdevops\b|\bcloud\b|kubernetes|\bcyber|it-sicherheit|hacking|pentest|robotik|\brobot|hackathon|\bux\b|\bui\b|\bapi\b|open[- ]?source|blockchain|tech[- ]?talk|tech[- ]?meetup|informatik|startup|accelerator|pitch[- ]?(?:night|battle|day)|\bfounder|gründung|existenzgründ|inkubator/.test(t);
 }
 
 // Online-/virtuelle Veranstaltung? Dann KEIN Karten-Standort.
@@ -115,7 +117,7 @@ function geocode(loc) {
 }
 function slug(s) { return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40); }
 
-function parseIcal(ics, sourceName) {
+function parseIcal(ics, sourceName, fallbackUrl) {
   const out = [];
   const blocks = unfold(ics).split("BEGIN:VEVENT").slice(1);
   for (const raw of blocks) {
@@ -138,7 +140,7 @@ function parseIcal(ics, sourceName) {
       location: online ? "Online" : (location || "Würzburg"),
       lat, lng, geoExact: online || knownVenue(location), online,
       category, tags: tagsFor(title + " " + description, category),
-      url: url || "https://www.meetup.com/", source: sourceName,
+      url: url || fallbackUrl || "https://www.meetup.com/", source: sourceName,
     });
   }
   return out;
@@ -149,7 +151,7 @@ async function fetchSource(src) {
     const r = await fetch(src.url, { headers: { "user-agent": "StadtsignalBot/1.0" } });
     if (!r.ok) return { name: src.name, ok: false, count: 0, error: `HTTP ${r.status}` };
     const ics = await r.text();
-    let events = parseIcal(ics, src.name);
+    let events = parseIcal(ics, src.name, src.home);
     // Breite Kalender: nur auf den TITEL filtern (Beschreibung erzeugt zu viele Fehltreffer).
     if (src.techOnly) events = events.filter((e) => techRelevant(e.title));
     return { name: src.name, ok: true, count: events.length, events };

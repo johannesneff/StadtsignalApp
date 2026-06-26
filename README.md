@@ -20,7 +20,8 @@ Profil, Interessen, Präferenzen, Suchverlauf, Historie und Notizen liegen im `l
 
 Angebunden (live, Cache 6 h, abgelaufene Events werden anhand der aktuellen Zeit ausgefiltert; laufende bleiben):
 
-- **Meetup** (iCal) – Würzburger Tech-Gruppen
+- **Meetup** (iCal) – Würzburger Tech-Gruppen (DATA & ANALYTICS, Analytics Pioneers, Modern Software Dev, Deep Learning, WUE.tech)
+- **ZDI / Gründerzentren Würzburg** (iCal, auf Tech/Startup gefiltert)
 - **AI Week Mainfranken** (Timetable-JSON, mit Koordinaten)
 - **FRIZZ Würzburg** (iCal, auf Tech gefiltert)
 - **Uni Würzburg** (Veranstaltungs-RSS, auf Tech gefiltert)
