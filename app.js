@@ -519,13 +519,7 @@ function renderUebersicht() {
   destroyMap();
   clear(root);
 
-  const refreshBtn = h("button", { class: "cal-nav", html: I.refresh, "aria-label": "Events neu abrufen",
-    onclick: (e) => {
-      const btn = e.currentTarget;
-      btn.style.opacity = "0.5";
-      loadLiveEvents(true).finally(() => { if (btn) btn.style.opacity = ""; });
-    } });
-  root.appendChild(header("Übersicht", "Karte & Kalender", refreshBtn));
+  root.appendChild(header("Übersicht", "Karte & Kalender"));
 
   const body = h("div", { class: "screen-body" });
   body.appendChild(h("div", { style: { display: "flex", justifyContent: "center" } },
