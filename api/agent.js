@@ -33,7 +33,7 @@ ANTWORTE IMMER AUF DEUTSCH und IMMER GENAU IN DIESEM FORMAT:
 
 🌐 Weitere aktuelle Funde (Websuche)
 - **Titel** — Datum/Uhrzeit — Ort — kurze Begründung — https://link-zur-eventseite
-(0–3 ZUSÄTZLICHE, noch nicht beendete IT-/Tech-Events in Würzburg/Mainfranken, die NICHT im EVENT-POOL stehen – per Websuche aus Quellen wie ZDI Mainfranken, THWS, Uni Würzburg, IHK, Stadt Würzburg, Gründerzentren, Eventbrite. Immer mit echtem Link. Liefert die Suche nichts Verlässliches, diesen Abschnitt KOMPLETT weglassen.)
+(0–3 ZUSÄTZLICHE, noch nicht beendete IT-/Tech-Events in Würzburg/Mainfranken, die NICHT im EVENT-POOL stehen – per Websuche aus Quellen wie ZDI Mainfranken, THWS, Uni Würzburg, IHK, Stadt Würzburg, Gründerzentren, Eventbrite. STRENGE Regeln: Nimm ein Event NUR auf, wenn du dir SEHR SICHER bist, dass es real und konkret existiert, und der Link DIREKT auf die spezifische Event-Detailseite zeigt (KEINE Startseite, KEINE Übersichts-/Kalenderseite, KEIN Such- oder Weiterleitungslink). Erfinde NICHTS und rate keine URLs. Im geringsten Zweifel das Event WEGLASSEN. Lieber diesen Abschnitt KOMPLETT weglassen als einen unsicheren oder allgemeinen Link zu zeigen.)
 
 Regeln:
 - Gewichte die AKTIVEN INTERESSEN und die HISTORIE (bereits besuchte Themen) STARK: Events, die dazu passen, bekommen höhere Match-Scores und stehen oben. Ohne aktive Interessen breit empfehlen.
@@ -70,20 +70,33 @@ function buildEventPool(events) {
 function extractUrl(line) { const m = line.match(/https?:\/\/[^\s)<>\]]+/); return m ? m[0].replace(/[.,;:]+$/, "") : null; }
 function extractTitle(line) { const m = line.match(/\*\*(.+?)\*\*/); return m ? m[1] : ""; }
 
-// Liefert "dead" (eindeutig tot/404), "ok" (erreichbar) oder "unknown" (Timeout/DNS).
-// WICHTIG: fail-open — nur "dead" wird verworfen. SPA-Seiten ohne Titel im Roh-HTML
-// oder transiente Fehler bleiben erhalten (sonst verschwinden echte Events).
-async function verifyUrl(url) {
+// STRENGE Prüfung für Websuche-Funde (fail-CLOSED): Ein Fund bleibt nur, wenn die
+// verlinkte Seite das Event tatsächlich belegt. Im Zweifel (Timeout, Homepage,
+// Such-/Redirect-Link, kein inhaltlicher Treffer) wird er VERWORFEN – so verschwinden
+// leere/erfundene Event-Seiten. (Pool-Events aus echten Feeds bleiben fail-open.)
+async function verifyWebFind(url, title) {
+  if (!url) return false;
+  // Such-/Grounding-Redirect-/Homepage-artige Links sind kein echtes Event.
+  if (/google\.[a-z.]+\/search|bing\.com\/search|duckduckgo|vertexaisearch|grounding-api-redirect|webcache/i.test(url)) return false;
   try {
     const ctrl = new AbortController();
-    const tm = setTimeout(() => ctrl.abort(), 5000);
+    const tm = setTimeout(() => ctrl.abort(), 6000);
     const r = await fetch(url, { redirect: "follow", signal: ctrl.signal, headers: { "user-agent": "Mozilla/5.0 (compatible; StadtsignalBot/1.0)" } });
     clearTimeout(tm);
-    if (!r.ok) return "dead"; // 404/410/5xx
+    if (!r.ok) return false;
+    const finalUrl = r.url || url;
+    let path = "/";
+    try { path = new URL(finalUrl).pathname || "/"; } catch { /* ignore */ }
+    if (path === "/" || path.length < 4) return false; // blanke Startseite ≠ konkretes Event
     const html = (await r.text()).toLowerCase();
-    if (/seite (konnte )?nicht gefunden|page not found|fehler 404|error 404|404 not found/.test(html.slice(0, 8000))) return "dead";
-    return "ok";
-  } catch { return "unknown"; } // Timeout/DNS/Abbruch -> behalten (fail-open)
+    if (/seite (konnte )?nicht gefunden|page not found|fehler 404|error 404|404 not found/.test(html.slice(0, 8000))) return false;
+    // Inhaltlicher Beleg: markante Titel-Tokens müssen auf der Seite vorkommen.
+    const tokens = (title || "").toLowerCase().split(/[^a-zà-ÿ0-9]+/).filter((w) => w.length > 4);
+    if (!tokens.length) return false; // ohne prüfbaren Titel nicht belegbar
+    const hits = tokens.filter((t) => html.includes(t)).length;
+    const need = tokens.length >= 2 ? 2 : 1; // mind. zwei starke Tokens, sonst einer
+    return hits >= need;
+  } catch { return false; } // Timeout/DNS -> im Zweifel raus (streng)
 }
 
 async function filterWebFinds(text) {
@@ -94,10 +107,10 @@ async function filterWebFinds(text) {
   for (let i = webStart + 1; i < lines.length; i++) {
     if (!lines[i].trim().startsWith("-")) continue;
     const url = extractUrl(lines[i]);
-    checks.push(url ? verifyUrl(url).then((status) => ({ i, status })) : Promise.resolve({ i, status: "ok" }));
+    checks.push(verifyWebFind(url, extractTitle(lines[i])).then((ok) => ({ i, ok })));
   }
-  // Nur eindeutig tote Links entfernen.
-  const drop = new Set((await Promise.all(checks)).filter((r) => r.status === "dead").map((r) => r.i));
+  // Alles verwerfen, was nicht belegt ist.
+  const drop = new Set((await Promise.all(checks)).filter((r) => !r.ok).map((r) => r.i));
   let kept = lines.filter((_, idx) => !drop.has(idx));
   // Leeren „🌐"-Abschnitt (kein einziger Fund übrig) komplett entfernen.
   const ws = kept.findIndex((l) => l.trim().startsWith("🌐"));
