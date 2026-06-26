@@ -279,6 +279,10 @@ a { color: var(--accent); text-decoration: none; }
 .density-bar { display: inline-block; width: 120px; height: 8px; border-radius: 6px;
   background: linear-gradient(90deg, #2c7fb8, #41b6c4, #7fcdbb, #c7e9b4, #ffffb2, #fd8d3c, #e31a1c); }
 
+.map-noloc { padding: 0 18px 18px; font-size: 12.5px; line-height: 1.5; }
+.map-noloc .noloc-item { color: var(--accent); font-weight: 600; }
+.map-noloc .noloc-item:hover { text-decoration: underline; }
+
 .legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 0 18px 18px; }
 .legend .item { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text-2); }
 .legend .dot { width: 11px; height: 11px; border-radius: 50%; }

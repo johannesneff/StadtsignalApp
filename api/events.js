@@ -45,6 +45,7 @@ const VENUE_COORDS = [
   [/hubland|informatik|universität|uni würzburg|campus/i, 49.7836, 9.9683],
   [/fhws|thws|sanderheinrich/i, 49.7768, 9.9305],
   [/vogel|max-planck/i, 49.7649, 9.9608],
+  [/werk ?3|werk3/i, 49.8039, 9.9216],
   [/marienplatz|central/i, 49.7913, 9.9298],
 ];
 
@@ -96,14 +97,12 @@ function tagsFor(text, category) {
   return [...tags];
 }
 function knownVenue(loc) { const s = loc || ""; return VENUE_COORDS.some(([re]) => re.test(s)); }
-function geocode(loc, id) {
-  const s = loc || "";
-  for (const [re, lat, lng] of VENUE_COORDS) if (re.test(s)) return [lat, lng];
-  let h = 0;
-  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  const dy = ((h % 1000) / 1000 - 0.5) * 0.03;
-  const dx = (((h >> 10) % 1000) / 1000 - 0.5) * 0.045;
-  return [WUE[0] + dy, WUE[1] + dx];
+// Nur bekannte Venues liefern Koordinaten. Unbekannte Orte -> [null, null]
+// (KEIN Jitter mehr): so wird keine falsche Position vorgetäuscht. Adressen mit
+// echtem Ortsstring versucht enrichEvents() danach per Nominatim aufzulösen.
+function geocode(loc) {
+  for (const [re, lat, lng] of VENUE_COORDS) if (re.test(loc || "")) return [lat, lng];
+  return [null, null];
 }
 function slug(s) { return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40); }
 
@@ -124,7 +123,7 @@ function parseIcal(ics, sourceName) {
     const id = (slug(sourceName).slice(0, 6) + "-" + (slug(uid) || slug(title))).slice(0, 48);
     const category = categorize(title + " " + description);
     const online = isOnline(title + " " + description + " " + location);
-    const [lat, lng] = online ? [null, null] : geocode(location, id);
+    const [lat, lng] = online ? [null, null] : geocode(location);
     out.push({
       id, title, description: description || "—", startsAt, endsAt,
       location: online ? "Online" : (location || "Würzburg"),
@@ -142,7 +141,8 @@ async function fetchSource(src) {
     if (!r.ok) return { name: src.name, ok: false, count: 0, error: `HTTP ${r.status}` };
     const ics = await r.text();
     let events = parseIcal(ics, src.name);
-    if (src.techOnly) events = events.filter((e) => techRelevant(e.title + " " + e.description));
+    // Breite Kalender: nur auf den TITEL filtern (Beschreibung erzeugt zu viele Fehltreffer).
+    if (src.techOnly) events = events.filter((e) => techRelevant(e.title));
     return { name: src.name, ok: true, count: events.length, events };
   } catch (err) {
     return { name: src.name, ok: false, count: 0, error: err?.message || "fetch failed" };
@@ -177,7 +177,8 @@ function parseRss(xml, sourceName) {
     const id = (slug(sourceName).slice(0, 6) + "-" + slug(link || title)).slice(0, 48);
     const category = categorize(title + " " + description);
     const online = isOnline(title + " " + description);
-    const [lat, lng] = online ? [null, null] : geocode("", id);
+    // RSS liefert keinen Veranstaltungsort -> keine Koordinaten (kein falscher Pin).
+    const lat = null, lng = null;
     out.push({
       id, title, description: description || "—", startsAt, endsAt: null,
       location: online ? "Online" : "Würzburg", lat, lng, online, geoExact: online,
@@ -193,7 +194,7 @@ async function fetchRss(src) {
     if (!r.ok) return { name: src.name, ok: false, count: 0, error: `HTTP ${r.status}` };
     const xml = await r.text();
     let events = parseRss(xml, src.name);
-    if (src.techOnly) events = events.filter((e) => techRelevant(e.title + " " + e.description));
+    if (src.techOnly) events = events.filter((e) => techRelevant(e.title));
     return { name: src.name, ok: true, count: events.length, events };
   } catch (err) {
     return { name: src.name, ok: false, count: 0, error: err?.message || "fetch failed" };
@@ -225,7 +226,7 @@ async function fetchAiWeek() {
       let lat = null, lng = null, geoExact = false;
       if (online) { geoExact = true; } // Online -> kein Karten-Pin
       else if (loc && typeof loc.lat === "number" && typeof loc.lng === "number") { lat = loc.lat; lng = loc.lng; geoExact = true; }
-      else { [lat, lng] = geocode(location, id); geoExact = knownVenue(location); }
+      else { [lat, lng] = geocode(location); geoExact = knownVenue(location); }
       const linkVal = s.links && s.links.event ? String(s.links.event) : "";
       const url = /^https?:\/\//i.test(linkVal) ? linkVal : "https://www.ai-week.de/programm.php";
       const channel = (s.channel && s.channel.name) ? s.channel.name : "";

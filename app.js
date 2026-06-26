@@ -147,6 +147,22 @@ function categoryTag(catId) {
   return h("span", { class: "tag", style: { background: hexA(interestColor(catId), 0.12), color: interestColor(catId) } },
     h("span", { class: "dot", style: { background: interestColor(catId) } }), categoryLabel(catId));
 }
+// Ehrliches Label: der Sammeltopf „dev" (= „Web-Entwicklung") wird, wenn möglich,
+// durch den spezifischeren Tag ersetzt (Startups, DevOps & Cloud, UX/UI …).
+function eventLabel(ev) {
+  if (ev.category === "dev") {
+    const SPEC = ["startup", "cloud", "ux", "robotics", "oss", "mobile", "blockchain", "gaming"];
+    const t = (ev.tags || []).find((x) => SPEC.includes(x));
+    if (t && INTEREST_BY_ID[t]) return INTEREST_BY_ID[t].label;
+  }
+  return categoryLabel(ev.category);
+}
+// Farbiger Tag mit dem ehrlichen Label (Farbe weiter aus der 4er-Kategorie).
+function eventTag(ev) {
+  const c = interestColor(ev.category);
+  return h("span", { class: "tag", style: { background: hexA(c, 0.12), color: c } },
+    h("span", { class: "dot", style: { background: c } }), eventLabel(ev));
+}
 function eventRow(ev, onClick) {
   const d = new Date(ev.startsAt);
   return h("button", { class: "event-row", onclick: onClick },
@@ -154,7 +170,7 @@ function eventRow(ev, onClick) {
     h("div", { class: "event-main" },
       h("div", { class: "t" }, ev.title),
       h("div", { class: "meta" },
-        categoryTag(ev.category), h("span", {}, "· " + fmtTime(ev.startsAt)), h("span", {}, "· " + ev.location),
+        eventTag(ev), h("span", {}, "· " + fmtTime(ev.startsAt)), h("span", {}, "· " + ev.location),
         isVisited(ev.id) ? h("span", { style: { color: "#34c759", fontWeight: "600" } }, "· ✓ besucht") : null),
     ),
     h("div", {}, ""),
@@ -180,7 +196,7 @@ function freshnessLine() {
 }
 
 function recoItem(ev, score, extraMeta) {
-  const meta = categoryLabel(ev.category) + " · " + fmtDateTime(ev.startsAt) + (extraMeta ? " · " + extraMeta : "");
+  const meta = eventLabel(ev) + " · " + fmtDateTime(ev.startsAt) + (extraMeta ? " · " + extraMeta : "");
   return h("div", { class: "reco-item" },
     h("div", {},
       h("button", { class: "reco-title", onclick: () => goToMap(ev.id) }, ev.title),
@@ -254,7 +270,7 @@ function renderScanner() {
         h("span", { class: "match" }, Math.round(top.score * 100) + "% Match")),
       h("div", { class: "muted small", style: { marginTop: "4px" } }, "Persönlich für dich"),
       h("div", { class: "hero-title" }, ev.title),
-      h("div", { class: "hero-meta" }, categoryTag(ev.category), h("span", {}, "· " + fmtDateTime(ev.startsAt)), h("span", {}, "· " + ev.location)),
+      h("div", { class: "hero-meta" }, eventTag(ev), h("span", {}, "· " + fmtDateTime(ev.startsAt)), h("span", {}, "· " + ev.location)),
       h("p", { class: "reason" }, top.reasons.join(" · ")),
       h("div", { style: { display: "flex", gap: "10px", marginTop: "16px", flexWrap: "wrap" } },
         h("button", { class: "btn primary", onclick: () => goToMap(ev.id) }, "Auf der Karte zeigen"),
@@ -382,7 +398,7 @@ function recoCard(ev, match, reason) {
   return h("div", { class: "reco-item" },
     h("div", {},
       h("button", { class: "reco-title", onclick: () => goToMap(ev.id) }, ev.title),
-      h("div", { class: "meta" }, categoryLabel(ev.category) + " · " + fmtDateTime(ev.startsAt) + (ev.location ? " · " + ev.location : "")),
+      h("div", { class: "meta" }, eventLabel(ev) + " · " + fmtDateTime(ev.startsAt) + (ev.location ? " · " + ev.location : "")),
       reason ? h("div", { class: "reco-reason" }, reason) : null,
       h("div", { class: "reco-actions" },
         h("button", { class: "reco-link", onclick: () => goToMap(ev.id) }, "Auf der Karte"),
@@ -555,7 +571,23 @@ function buildMapCard() {
       h("span", { class: "item muted small" }, "Verdichtung:"),
       h("span", { class: "density-bar" }),
       h("span", { class: "item muted small" }, "wenig → viel")),
+    h("div", { class: "map-noloc", id: "map-noloc" }),
   );
+}
+// Events des Tages ohne Kartenstandort (online oder nicht verortbar) als Hinweis listen.
+function renderMapNoloc() {
+  const el = $("#map-noloc");
+  if (!el) return;
+  clear(el);
+  const list = eventsOnOffset(mapDayOffset).filter((e) => !hasGeo(e));
+  if (!list.length) { el.style.display = "none"; return; }
+  el.style.display = "";
+  el.appendChild(h("span", { class: "muted small" }, "Ohne Kartenstandort (keine Verortung möglich): "));
+  const shown = list.slice(0, 8);
+  shown.forEach((ev, i) => {
+    el.appendChild(h("a", { class: "noloc-item", href: ev.url, target: "_blank", rel: "noopener" }, ev.title + (ev.online ? " · online" : "")));
+    if (i < shown.length - 1) el.appendChild(document.createTextNode(" · "));
+  });
 }
 function stepDay(delta) {
   const mx = maxDayOffset();
@@ -570,6 +602,7 @@ function updateDayUI() {
   if (top) top.textContent = mapDayOffset === 0 ? "Heute" : dayLabelShort(mapDayOffset);
   if (prev) prev.disabled = mapDayOffset <= 0;
   if (next) next.disabled = mapDayOffset >= mx;
+  renderMapNoloc();
 }
 function maybeInitMap() {
   if (currentScreen !== "uebersicht" || overviewTab !== "karte") return;
@@ -653,7 +686,7 @@ function popupHtml(ev) {
   const visited = isVisited(ev.id);
   return `<div class="popup">
     <div class="popup-title">${esc(ev.title)}</div>
-    <div class="popup-meta">${esc(categoryLabel(ev.category))} · ${esc(fmtDateTime(ev.startsAt))}</div>
+    <div class="popup-meta">${esc(eventLabel(ev))} · ${esc(fmtDateTime(ev.startsAt))}</div>
     <div class="popup-meta">${esc(ev.location)}</div>
     <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn" style="padding:7px 14px;min-height:34px;font-size:13px" data-visit="${ev.id}">${visited ? "✓ Besucht" : "Merken"}</button>
@@ -725,7 +758,7 @@ function eventRowWithVisit(ev) {
     h("div", { class: "event-date" }, h("div", { class: "d tnum" }, fmtTime(ev.startsAt).slice(0, 5)), h("div", { class: "m" }, ev.source)),
     h("div", { class: "event-main" },
       h("div", { class: "t" }, ev.title),
-      h("div", { class: "meta" }, categoryTag(ev.category), h("span", {}, "· " + ev.location)),
+      h("div", { class: "meta" }, eventTag(ev), h("span", {}, "· " + ev.location)),
       h("div", { class: "reco-actions" },
         h("button", { class: "reco-link", onclick: () => goToMap(ev.id) }, "Auf der Karte"),
         h("a", { class: "reco-link", href: ev.url, target: "_blank", rel: "noopener" }, "Zur Eventseite →"))),
@@ -874,7 +907,7 @@ function buildHistorie() {
       h("div", { class: "event-date" }, h("div", { class: "d tnum" }, String(new Date(ev.startsAt).getDate())), h("div", { class: "m" }, MONTHS_SHORT[new Date(ev.startsAt).getMonth()])),
       h("div", { class: "event-main" },
         h("div", { class: "t" }, ev.title),
-        h("div", { class: "meta" }, categoryTag(ev.category), h("span", {}, "· " + ev.location),
+        h("div", { class: "meta" }, eventTag(ev), h("span", {}, "· " + ev.location),
           state.notes[ev.id] && state.notes[ev.id].trim() ? h("span", { style: { color: "var(--accent)", fontWeight: "600" } }, "· 📝 Notiz") : null),
         h("div", { class: "reco-actions" },
           h("button", { class: "reco-link", onclick: () => goToMap(ev.id) }, "Auf der Karte"),
@@ -953,7 +986,7 @@ function openNewsletterPreview() {
           return h("div", { class: "nl-event" },
             h("div", { class: "thumb", style: { backgroundImage: `url(${thumbUrl(ev)})` } }),
             h("div", { class: "body" },
-              h("div", {}, categoryTag(ev.category)),
+              h("div", {}, eventTag(ev)),
               h("div", { class: "t", style: { marginTop: "4px" } }, ev.title),
               h("div", { class: "meta" }, fmtDateTime(ev.startsAt)),
               h("div", { class: "meta" }, ev.location),
@@ -991,7 +1024,7 @@ async function sendNewsletter() {
     top: top ? { title: top.event.title, match: Math.round(top.score * 100), reason: top.reasons.join(" · ") } : null,
     events: items.map((r) => {
       const ev = r.event;
-      return { title: ev.title, category: ev.category, categoryLabel: categoryLabel(ev.category), when: fmtDateTime(ev.startsAt), location: ev.location, url: ev.url, image: thumbUrl(ev) };
+      return { title: ev.title, category: ev.category, categoryLabel: eventLabel(ev), when: fmtDateTime(ev.startsAt), location: ev.location, url: ev.url, image: thumbUrl(ev) };
     }),
   };
   toast("Sende E-Mail …", "info");
