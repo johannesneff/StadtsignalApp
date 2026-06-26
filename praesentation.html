@@ -102,12 +102,28 @@
     background:#0b0b0d; border-radius:46px; padding:11px;
     box-shadow:0 30px 70px rgba(0,0,0,.28), 0 2px 0 rgba(255,255,255,.4) inset;
   }
-  .phone::after{content:""; position:absolute; top:16px; left:50%; transform:translateX(-50%);
-                width:120px; height:26px; background:#0b0b0d; border-radius:0 0 16px 16px; z-index:3}
-  .phone .screen{width:100%; height:100%; border-radius:36px; overflow:hidden; background:#fff; position:relative}
-  /* iframe rendert mit fester Mobil-Breite (390px) und wird per JS in den Rahmen skaliert
-     -> keine Anschnitte, kein horizontales Scrollen. */
-  .phone iframe{border:0; display:block; position:absolute; top:0; left:0; transform-origin:top left}
+  .phone .screen{width:100%; height:100%; border-radius:36px; overflow:hidden; background:#f5f5f7;
+                 position:relative; display:flex; flex-direction:column}
+  /* iOS-Statusleiste (hält die Notch/Island sauber) */
+  .ui-status{position:relative; flex:0 0 40px; display:flex; align-items:center; justify-content:space-between;
+             padding:0 22px 0 26px; font-size:15px; color:#1d1d1f; background:#f5f5f7}
+  .ui-status .time{font-weight:700; letter-spacing:-.02em}
+  .ui-status .sys{display:flex; align-items:center; gap:6px}
+  .ui-island{position:absolute; top:9px; left:50%; transform:translateX(-50%); width:92px; height:24px;
+             background:#0b0b0d; border-radius:14px}
+  /* Safari-Adressleiste */
+  .ui-url{flex:0 0 auto; background:#f5f5f7; padding:1px 12px 9px}
+  .ui-url .bar{display:flex; align-items:center; gap:9px; background:#e6e6ea; border-radius:13px; padding:8px 13px}
+  .ui-url .bar .u{flex:1; text-align:center; font-size:14.5px; color:#1d1d1f; font-weight:500;
+                  white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .ui-url .bar svg{flex:0 0 auto; color:#3c3c43; opacity:.65}
+  /* App-Viewport (hier wird der Prototyp eingepasst) */
+  .app-viewport{flex:1; position:relative; overflow:hidden; background:#f5f5f7}
+  .app-viewport iframe{border:0; display:block; position:absolute; top:0; left:0; transform-origin:top left}
+  /* Safari-Toolbar unten */
+  .ui-toolbar{flex:0 0 48px; display:flex; align-items:center; justify-content:space-around;
+              padding:0 20px; background:#fbfbfc; border-top:1px solid #e3e3e6; color:#0a84ff}
+  .ui-toolbar svg{display:block}
   .hint{font-size:12.5px; color:var(--ink3)}
 
   /* controls */
@@ -247,7 +263,30 @@
     <div class="device-wrap">
       <div class="device-label"><span class="live"><span class="blink"></span>Live-Prototyp</span> · mobil · interaktiv</div>
       <div class="phone"><div class="screen">
-        <iframe id="app" src="./index.html?demo=1" title="Stadtsignal Prototyp" loading="eager"></iframe>
+        <div class="ui-status">
+          <span class="ui-island"></span>
+          <span class="time">9:41</span>
+          <span class="sys">
+            <svg width="17" height="11" viewBox="0 0 17 11"><rect x="0" y="7" width="3" height="4" rx="1" fill="#1d1d1f"/><rect x="4.6" y="5" width="3" height="6" rx="1" fill="#1d1d1f"/><rect x="9.2" y="2.6" width="3" height="8.4" rx="1" fill="#1d1d1f"/><rect x="13.8" y="0" width="3" height="11" rx="1" fill="#1d1d1f" opacity=".35"/></svg>
+            <svg width="16" height="12" viewBox="0 0 24 24" fill="#1d1d1f"><path d="M12 18.4a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2Z"/><path d="M12 13.1c2 0 3.9.79 5.3 2.2l-2 2c-.88-.88-2.05-1.36-3.3-1.36s-2.42.48-3.3 1.36l-2-2A7.5 7.5 0 0 1 12 13.1Z"/><path d="M12 7.9c3.2 0 6.2 1.25 8.45 3.5l-2 2A9.2 9.2 0 0 0 12 10.7a9.2 9.2 0 0 0-6.45 2.7l-2-2A11.9 11.9 0 0 1 12 7.9Z"/></svg>
+            <svg width="26" height="13" viewBox="0 0 26 13"><rect x="1" y="1" width="21" height="11" rx="3.2" fill="none" stroke="#1d1d1f" stroke-opacity=".35"/><rect x="2.6" y="2.6" width="15.5" height="7.8" rx="1.8" fill="#1d1d1f"/><rect x="23.4" y="4.2" width="1.8" height="4.6" rx=".9" fill="#1d1d1f" opacity=".35"/></svg>
+          </span>
+        </div>
+        <div class="ui-url"><div class="bar">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 8h10M7 12h6"/></svg>
+          <span class="u">stadtsignal-app.vercel.app</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v5h-5"/></svg>
+        </div></div>
+        <div class="app-viewport">
+          <iframe id="app" src="./index.html?demo=1" title="Stadtsignal Prototyp" loading="eager"></iframe>
+        </div>
+        <div class="ui-toolbar">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" style="opacity:.35"><path d="M9 6l6 6-6 6"/></svg>
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M8.5 7.5 12 4l3.5 3.5"/><path d="M6 12v6a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-6"/></svg>
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h11a1 1 0 0 1 1 1v15l-6.5-3L5 20V5a1 1 0 0 1 1-1Z"/></svg>
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="12" height="13" rx="2"/><path d="M8 7V4h12v13h-3"/></svg>
+        </div>
       </div></div>
       <div class="hint">Du kannst direkt im Fenster tippen &amp; klicken.</div>
     </div>
@@ -291,7 +330,7 @@
 
   // App im Telefon-Rahmen mit fester Mobil-Breite rendern und passgenau skalieren.
   function fitPhone(){
-    var sc = document.querySelector('.phone .screen');
+    var sc = document.querySelector('.app-viewport');
     var ifr = document.getElementById('app');
     if(!sc || !ifr) return;
     var w = sc.clientWidth, h = sc.clientHeight, BASE = 390;
