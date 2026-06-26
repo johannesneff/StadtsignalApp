@@ -528,6 +528,7 @@ function renderUebersicht() {
 /* --- Karte --- */
 function dayStart(offset) { const d = startOfToday(); d.setDate(d.getDate() + offset); return d; }
 function dayLabelShort(offset) { const d = dayStart(offset); return `${WD[d.getDay()]} ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.`; }
+function hasGeo(e) { return typeof e.lat === "number" && typeof e.lng === "number" && !e.online; }
 function eventsOnOffset(offset) { const base = dayStart(offset); return EVENTS.filter((e) => !isExpired(e) && sameDay(e.startsAt, base)); }
 function maxDayOffset() {
   let mx = 0;
@@ -545,7 +546,7 @@ function buildMapCard() {
       h("button", { class: "cal-nav", id: "day-prev", "aria-label": "Vorheriger Tag", onclick: () => stepDay(-1) }, "‹"),
       h("div", { class: "day-field" },
         h("div", { class: "day-label", id: "day-label" }, dayLabelShort(mapDayOffset) + (mapDayOffset === 0 ? " · Heute" : "")),
-        h("div", { class: "day-count muted small", id: "day-count" }, eventsOnOffset(mapDayOffset).length + " Events")),
+        h("div", { class: "day-count muted small", id: "day-count" }, eventsOnOffset(mapDayOffset).filter(hasGeo).length + " Events")),
       h("button", { class: "cal-nav", id: "day-next", "aria-label": "Nächster Tag", onclick: () => stepDay(1) }, "›")),
     h("div", { class: "legend" },
       ["ai", "dev", "data", "security"].map((c) =>
@@ -565,7 +566,7 @@ function updateDayUI() {
   const mx = maxDayOffset();
   const lbl = $("#day-label"), cnt = $("#day-count"), top = $("#map-day-top"), prev = $("#day-prev"), next = $("#day-next");
   if (lbl) lbl.textContent = dayLabelShort(mapDayOffset) + (mapDayOffset === 0 ? " · Heute" : "");
-  if (cnt) cnt.textContent = eventsOnOffset(mapDayOffset).length + " Events";
+  if (cnt) cnt.textContent = eventsOnOffset(mapDayOffset).filter(hasGeo).length + " Events";
   if (top) top.textContent = mapDayOffset === 0 ? "Heute" : dayLabelShort(mapDayOffset);
   if (prev) prev.disabled = mapDayOffset <= 0;
   if (next) next.disabled = mapDayOffset >= mx;
@@ -591,8 +592,9 @@ function refreshMapData() {
   markers = []; markerById = {};
   if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; }
 
-  // Nur Events des gewählten Tages anzeigen.
-  const evs = eventsOnOffset(mapDayOffset);
+  // Nur Events des gewählten Tages MIT echtem Standort anzeigen (Online-Events
+  // haben keine Koordinaten und gehören nicht auf die Karte).
+  const evs = eventsOnOffset(mapDayOffset).filter(hasGeo);
   const heatPts = [];
   evs.forEach((ev) => {
     heatPts.push([ev.lat, ev.lng, 1]); // Dichte: mehrere Events am selben Ort -> heißer
@@ -662,9 +664,10 @@ function popupHtml(ev) {
     </div>`;
 }
 function goToMap(id) {
+  const ev = EVENTS.find((e) => e.id === id);
+  if (ev && !hasGeo(ev)) { toast("Dieses Event ist online – kein Standort auf der Karte.", "info"); return; }
   overviewTab = "karte";
   go("uebersicht");
-  const ev = EVENTS.find((e) => e.id === id);
   if (ev) mapDayOffset = Math.max(0, dayOffset(ev.startsAt)); // auf den Tag des Events springen
   renderUebersicht();
   setTimeout(() => {

@@ -21,10 +21,18 @@ const RSS_SOURCES = [
   { name: "Uni Würzburg", url: "https://www.uni-wuerzburg.de/index.php?id=197207&type=151", techOnly: true },
 ];
 
-// Tech-Relevanz-Filter für breite Kalender (Kultur etc. wird ausgesiebt).
+// Tech-Relevanz-Filter für BREITE Kalender (Uni/FRIZZ). Streng gehalten, damit
+// allgemeine Uni-/Kultur-Events NICHT als Tech durchrutschen (verlangt echte
+// Tech-Begriffe statt zu breiter Wörter wie „digital", „web", „Entwicklung").
 function techRelevant(text) {
   const t = (text || "").toLowerCase();
-  return /\bki\b|\bai\b|\bit\b|\bllm\b|tech|software|programmier|develop|entwickl|daten|\bdata\b|cyber|security|sicherheit|digital|robot|\bweb\b|cloud|devops|machine learning|deep learning|hackathon|startup|gründ|innovation|coding|python|javascript|\bux\b/.test(t);
+  return /\bk[iü]\b|künstliche intelligenz|\bai\b|\bllm\b|machine learning|deep learning|data scien|data engineer|big data|\banalytics\b|softwareentwickl|software-entwickl|programmier|\bcoding\b|\bpython\b|javascript|typescript|web[- ]?entwickl|frontend|backend|full[- ]?stack|\bdevops\b|\bcloud\b|kubernetes|\bcyber|it-sicherheit|hacking|pentest|robotik|\brobot|hackathon|\bux\b|\bui\b|\bapi\b|open[- ]?source|blockchain|tech[- ]?talk|tech[- ]?meetup|informatik/.test(t);
+}
+
+// Online-/virtuelle Veranstaltung? Dann KEIN Karten-Standort.
+function isOnline(text) {
+  const t = (text || "").toLowerCase();
+  return /\bonline\b|\bwebinar\b|\bzoom\b|virtuell|livestream|live-stream|\bremote\b|ms teams|microsoft teams|\bwebex\b|videokonferenz|per video|digital teilnehmen/.test(t);
 }
 
 const WUE = [49.7913, 9.9534];
@@ -115,10 +123,12 @@ function parseIcal(ics, sourceName) {
     const uid = ((getProp(block, "UID") || {}).value || "").trim();
     const id = (slug(sourceName).slice(0, 6) + "-" + (slug(uid) || slug(title))).slice(0, 48);
     const category = categorize(title + " " + description);
-    const [lat, lng] = geocode(location, id);
+    const online = isOnline(title + " " + description + " " + location);
+    const [lat, lng] = online ? [null, null] : geocode(location, id);
     out.push({
       id, title, description: description || "—", startsAt, endsAt,
-      location: location || "Würzburg", lat, lng, geoExact: knownVenue(location),
+      location: online ? "Online" : (location || "Würzburg"),
+      lat, lng, geoExact: online || knownVenue(location), online,
       category, tags: tagsFor(title + " " + description, category),
       url: url || "https://www.meetup.com/", source: sourceName,
     });
@@ -166,10 +176,11 @@ function parseRss(xml, sourceName) {
     const description = stripHtml(rssTag(item, "description")).slice(0, 400);
     const id = (slug(sourceName).slice(0, 6) + "-" + slug(link || title)).slice(0, 48);
     const category = categorize(title + " " + description);
-    const [lat, lng] = geocode("", id);
+    const online = isOnline(title + " " + description);
+    const [lat, lng] = online ? [null, null] : geocode("", id);
     out.push({
       id, title, description: description || "—", startsAt, endsAt: null,
-      location: "Würzburg", lat, lng,
+      location: online ? "Online" : "Würzburg", lat, lng, online, geoExact: online,
       category, tags: tagsFor(title + " " + description, category),
       url: link || "https://www.uni-wuerzburg.de/aktuelles/veranstaltungen/", source: sourceName,
     });
@@ -211,9 +222,10 @@ async function fetchAiWeek() {
         ? [loc.name, loc.streetNo, loc.city].filter(Boolean).join(", ")
         : "Online";
       const id = "aiweek-" + (s.id || slug(title));
-      let lat, lng, geoExact = false;
-      if (loc && typeof loc.lat === "number" && typeof loc.lng === "number") { lat = loc.lat; lng = loc.lng; geoExact = true; }
-      else { [lat, lng] = geocode(online ? "" : location, id); geoExact = !online && knownVenue(location); }
+      let lat = null, lng = null, geoExact = false;
+      if (online) { geoExact = true; } // Online -> kein Karten-Pin
+      else if (loc && typeof loc.lat === "number" && typeof loc.lng === "number") { lat = loc.lat; lng = loc.lng; geoExact = true; }
+      else { [lat, lng] = geocode(location, id); geoExact = knownVenue(location); }
       const linkVal = s.links && s.links.event ? String(s.links.event) : "";
       const url = /^https?:\/\//i.test(linkVal) ? linkVal : "https://www.ai-week.de/programm.php";
       const channel = (s.channel && s.channel.name) ? s.channel.name : "";
@@ -221,7 +233,7 @@ async function fetchAiWeek() {
       events.push({
         id, title, description: desc || "AI Week Mainfranken", startsAt,
         endsAt: (s.end || "").trim() || null,
-        location: online ? "Online · AI Week" : location, lat, lng, geoExact,
+        location: online ? "Online · AI Week" : location, lat, lng, geoExact, online,
         category, tags: tagsFor(`${title} ${desc} ${channel}`, category),
         url, source: AIWEEK_NAME,
       });
