@@ -1,0 +1,12 @@
+# Niemals hochladen: lokale Secrets (Key kommt als Env-Variable in Vercel)
+.env
+.env.*
+!.env.example
+
+# Lokales / nicht benötigt im Deployment
+node_modules
+.git
+.claude
+dev-server.mjs
+.DS_Store
+*.log

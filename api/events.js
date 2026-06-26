@@ -231,6 +231,59 @@ async function fetchAiWeek() {
   }
 }
 
+// ---------- Dedupe (gleiche Events aus mehreren Quellen zusammenführen) ----------
+// Schlüssel: normalisierter Titel + Start-Tag + Start-Stunde. So wird z. B. ein
+// AI-Week-Talk, der auch als Meetup-iCal auftaucht, nur einmal gezeigt.
+function normTitle(s) {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Diakritika weg
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+function dayHourKey(iso) {
+  // robust gegen "Z" und naive Wandzeit: nur die ersten 13 Zeichen (YYYY-MM-DDThh)
+  const m = (iso || "").match(/(\d{4})-(\d{2})-(\d{2})T(\d{2})/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}T${m[4]}` : (iso || "");
+}
+// Wie "vollständig" ist ein Datensatz? Höher = lieber behalten / als Basis nutzen.
+function quality(e) {
+  let q = 0;
+  const url = e.url || "";
+  const generic = /meetup\.com\/?$|ai-week\.de\/programm|uni-wuerzburg\.de\/aktuelles|frizz-wuerzburg\.de\/?$/i;
+  if (url && !generic.test(url)) q += 3;          // echter Event-Link
+  if (e.endsAt) q += 1;                            // bekannte Endzeit
+  if (e.location && !/^würzburg$|^online/i.test(e.location)) q += 1; // konkrete Adresse
+  q += Math.min((e.description || "").length, 300) / 300; // mehr Beschreibung
+  return q;
+}
+function mergeEvents(base, other) {
+  // Basis ist der bessere Datensatz; fehlende Felder aus dem anderen ergänzen.
+  const out = { ...base };
+  if (!out.endsAt && other.endsAt) out.endsAt = other.endsAt;
+  if ((!out.description || out.description === "—") && other.description) out.description = other.description;
+  const generic = /meetup\.com\/?$|ai-week\.de\/programm|uni-wuerzburg\.de\/aktuelles|frizz-wuerzburg\.de\/?$/i;
+  if ((!out.url || generic.test(out.url)) && other.url && !generic.test(other.url)) out.url = other.url;
+  // Quellen sichtbar zusammenführen (z. B. "Meetup · … + AI Week").
+  const srcs = new Set([base.source, other.source].filter(Boolean));
+  out.source = [...srcs].join(" + ");
+  out.tags = [...new Set([...(base.tags || []), ...(other.tags || [])])];
+  return out;
+}
+function dedupe(events) {
+  const byKey = new Map();
+  for (const e of events) {
+    const key = normTitle(e.title) + "@" + dayHourKey(e.startsAt);
+    const prev = byKey.get(key);
+    if (!prev) { byKey.set(key, e); continue; }
+    // Bessere Basis wählen, Rest mergen.
+    const base = quality(e) >= quality(prev) ? e : prev;
+    const other = base === e ? prev : e;
+    byKey.set(key, mergeEvents(base, other));
+  }
+  return [...byKey.values()];
+}
+
 export default async function handler(req, res) {
   const now = Date.now();
   if (CACHE.data && now - CACHE.at < TTL && !(req.query && req.query.refresh)) {
@@ -253,10 +306,7 @@ export default async function handler(req, res) {
     const end = e.endsAt ? new Date(e.endsAt).getTime() : new Date(e.startsAt).getTime() + HOURS3;
     return end >= now;
   };
-  const seen = new Set();
-  events = events
-    .filter(notEnded)
-    .filter((e) => (seen.has(e.id) ? false : seen.add(e.id)))
+  events = dedupe(events.filter(notEnded))
     .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
 
   const data = {

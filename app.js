@@ -175,6 +175,21 @@ function recoItem(ev, score, extraMeta) {
 /* ============================================================
    SCANNER (KI-Agent + lokale Empfehlungen)
    ============================================================ */
+// Persönliche Anrede auf der Startseite: „Was suchst du heute, Johannes?"
+// Nutzt nur den ersten Namensteil; ohne Namen die neutrale Variante.
+function firstName() {
+  return (state.name || "").trim().split(/\s+/)[0] || "";
+}
+function greeting() {
+  const n = firstName();
+  return n ? `Was suchst du heute, ${n}?` : "Was suchst du heute?";
+}
+// Begrüßung live aktualisieren, sobald der Name getippt wird (kein Full-Rerender nötig).
+function updateGreeting() {
+  const el = document.getElementById("scannerGreeting");
+  if (el) el.textContent = greeting();
+}
+
 function renderScanner() {
   const root = $("#screen-scanner");
   if (!root) return;
@@ -198,7 +213,7 @@ function renderScanner() {
 
   left.appendChild(h("div", { class: "card" },
     h("div", { class: "section-eyebrow" }, h("span", { html: I.sparkle }), "Frag den Agenten"),
-    h("h2", { class: "section-title", style: { margin: "8px 0 16px" } }, "Was suchst du heute?"),
+    h("h2", { class: "section-title", id: "scannerGreeting", style: { margin: "8px 0 16px" } }, greeting()),
     h("div", { class: "search-wrap" }, input, goBtn),
     h("div", { style: { marginTop: "14px" } }, sugRow),
     thinking, results,
@@ -653,7 +668,7 @@ function renderEinstellungen() {
 
   // Profil
   const nameInput = h("input", { class: "input", type: "text", placeholder: "Wie heißt du?", value: state.name,
-    oninput: (e) => { state.name = e.target.value; save(); } });
+    oninput: (e) => { state.name = e.target.value; save(); updateGreeting(); } });
   body.appendChild(h("div", { class: "card" },
     h("div", { class: "profile-row" }, h("div", { class: "avatar", html: I.person }),
       h("div", {}, h("div", { class: "who" }, "Mein Konto"), h("div", { class: "muted small" }, "Gast – nur lokal gespeichert"))),
@@ -682,7 +697,18 @@ function renderEinstellungen() {
         h("div", { class: "muted small", style: { marginTop: "3px" } }, "Benachrichtigung bei Hotspots in deiner Nähe (geplant)")),
       h("label", { class: "switch" }, swInput, h("span", { class: "slider" })))));
 
-  // Newsletter
+  // Präferenzen (lokal, fließen in den Agenten ein)
+  body.appendChild(buildPrefs());
+
+  // Newsletter (zwischen Präferenzen und Historie)
+  body.appendChild(buildNewsletter());
+
+  // Historie (Besucht / Notizen)
+  body.appendChild(buildHistorie());
+  root.appendChild(body);
+}
+
+function buildNewsletter() {
   const emailInput = h("input", { class: "input", type: "email", placeholder: "du@beispiel.de", value: state.email,
     oninput: (e) => { state.email = e.target.value; save(); } });
   const seg = h("div", { class: "segmented" },
@@ -690,7 +716,7 @@ function renderEinstellungen() {
       h("button", { "aria-pressed": state.rhythm === v, onclick: () => { state.rhythm = v; save(); renderEinstellungen(); } }, l)));
   const matching = EVENTS.filter((e) => e.tags.some((t) => state.interests.includes(t)));
   const perWeek = Math.max(1, Math.round(matching.length / 2));
-  body.appendChild(h("div", { class: "card" },
+  return h("div", { class: "card" },
     h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "16px" } },
       h("h2", { class: "section-title" }, "Newsletter"), h("span", { class: "muted" }, "ca. " + perWeek + " Events/Woche")),
     h("div", { class: "field", style: { marginBottom: "16px" } }, h("label", {}, "E-MAIL"), emailInput),
@@ -698,14 +724,7 @@ function renderEinstellungen() {
     h("div", { style: { display: "flex", gap: "10px", flexWrap: "wrap" } },
       h("button", { class: "btn", onclick: openNewsletterPreview }, h("span", { html: I.eye }), "Vorschau"),
       h("button", { class: "btn primary", onclick: sendNewsletter }, h("span", { html: I.send }), "An mich senden")),
-    h("div", { class: "muted small", style: { marginTop: "10px" } }, "Öffnet deine Mail-App mit fertigem Entwurf.")));
-
-  // Präferenzen (lokal, fließen in den Agenten ein)
-  body.appendChild(buildPrefs());
-
-  // Historie (Besucht / Notizen)
-  body.appendChild(buildHistorie());
-  root.appendChild(body);
+    h("div", { class: "muted small", style: { marginTop: "10px" } }, "Öffnet deine Mail-App mit fertigem Entwurf."));
 }
 
 function prefField(label, control) {
