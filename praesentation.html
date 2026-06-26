@@ -98,7 +98,7 @@
   .device-label .live .blink{width:8px;height:8px;border-radius:50%;background:#34c759; animation:blink 1.6s infinite}
   @keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
   .phone{
-    position:relative; height:min(760px,80vh); aspect-ratio:360/740;
+    position:relative; height:min(660px,68vh); aspect-ratio:360/740;
     background:#0b0b0d; border-radius:46px; padding:11px;
     box-shadow:0 30px 70px rgba(0,0,0,.28), 0 2px 0 rgba(255,255,255,.4) inset;
   }
@@ -125,6 +125,15 @@
               padding:0 20px; background:#fbfbfc; border-top:1px solid #e3e3e6; color:#0a84ff}
   .ui-toolbar svg{display:block}
   .hint{font-size:12.5px; color:var(--ink3)}
+  .qr{display:flex; align-items:center; gap:13px; background:var(--surface); border:1px solid var(--line);
+      border-radius:16px; padding:10px 16px 10px 10px; box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .qr .qr-img{width:96px; height:96px; flex:0 0 96px; background:#fff; border-radius:11px; padding:10px;
+              border:1px solid var(--line); display:grid; place-items:center}
+  .qr .qr-img svg{width:100%; height:100%; display:block}
+  .qr .qr-cap{display:flex; flex-direction:column; gap:2px; line-height:1.25}
+  .qr .qr-cap .scan{font-size:12px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:.04em}
+  .qr .qr-cap b{font-size:15px; font-weight:650; letter-spacing:-.01em}
+  .qr .qr-cap .u{font-size:12.5px; color:var(--ink2)}
 
   /* controls */
   .controls{display:flex; align-items:center; justify-content:center; gap:18px; padding:6px 0 20px}
@@ -261,7 +270,7 @@
 
     <!-- DEVICE (persistent — once loaded) -->
     <div class="device-wrap">
-      <div class="device-label"><span class="live"><span class="blink"></span>Live-Prototyp</span> · mobil · interaktiv</div>
+      <div class="device-label"><span class="live"><span class="blink"></span>Live</span> · stadtsignal-app.vercel.app</div>
       <div class="phone"><div class="screen">
         <div class="ui-status">
           <span class="ui-island"></span>
@@ -278,7 +287,7 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v5h-5"/></svg>
         </div></div>
         <div class="app-viewport">
-          <iframe id="app" src="./index.html?demo=1" title="Stadtsignal Prototyp" loading="eager"></iframe>
+          <iframe id="app" src="https://stadtsignal-app.vercel.app/?demo=1" title="Stadtsignal (Live)" loading="eager"></iframe>
         </div>
         <div class="ui-toolbar">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
@@ -288,7 +297,14 @@
           <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="12" height="13" rx="2"/><path d="M8 7V4h12v13h-3"/></svg>
         </div>
       </div></div>
-      <div class="hint">Du kannst direkt im Fenster tippen &amp; klicken.</div>
+      <div class="qr">
+        <div class="qr-img"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29" shape-rendering="crispEdges"><path stroke="#1d1d1f" d="M0 0.5h7m8 0h2m2 0h2m1 0h7M0 1.5h1m5 0h1m4 0h2m5 0h1m3 0h1m5 0h1M0 2.5h1m1 0h3m1 0h1m1 0h1m1 0h3m1 0h1m1 0h1m1 0h1m3 0h1m1 0h3m1 0h1M0 3.5h1m1 0h3m1 0h1m1 0h4m5 0h2m1 0h1m1 0h1m1 0h3m1 0h1M0 4.5h1m1 0h3m1 0h1m1 0h1m1 0h1m1 0h4m1 0h4m1 0h1m1 0h3m1 0h1M0 5.5h1m5 0h1m1 0h2m3 0h5m2 0h1m1 0h1m5 0h1M0 6.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M8 7.5h1m1 0h4m2 0h1m1 0h1M0 8.5h1m1 0h5m2 0h1m1 0h2m1 0h1m2 0h1m4 0h5M2 9.5h1m6 0h2m1 0h1m6 0h2m1 0h3m3 0h1M2 10.5h5m1 0h2m1 0h2m2 0h1m1 0h1m2 0h1m3 0h1M1 11.5h1m1 0h3m2 0h3m1 0h1m1 0h2m2 0h1m1 0h2m1 0h3m1 0h1M0 12.5h4m2 0h1m2 0h1m2 0h1m2 0h3m1 0h1m5 0h2M0 13.5h3m1 0h2m4 0h5m1 0h1m1 0h2m2 0h3m3 0h1M2 14.5h3m1 0h1m1 0h4m1 0h3m5 0h1m1 0h4M1 15.5h2m2 0h1m1 0h1m1 0h1m1 0h3m1 0h1m4 0h1m1 0h1m1 0h1m2 0h1M3 16.5h4m3 0h2m2 0h4m1 0h1m5 0h2M0 17.5h6m1 0h3m2 0h1m3 0h1m2 0h6m1 0h1m1 0h1M0 18.5h1m4 0h2m3 0h1m1 0h1m2 0h4m1 0h3m1 0h1m1 0h1M0 19.5h1m1 0h1m1 0h2m2 0h5m1 0h2m2 0h1m4 0h2m2 0h1M0 20.5h1m2 0h5m2 0h1m4 0h1m1 0h1m2 0h5m1 0h3M8 21.5h3m1 0h3m1 0h1m1 0h1m1 0h1m3 0h5M0 22.5h7m3 0h6m1 0h4m1 0h1m1 0h3M0 23.5h1m5 0h1m1 0h2m2 0h2m2 0h1m2 0h2m3 0h1m3 0h1M0 24.5h1m1 0h3m1 0h1m1 0h2m2 0h1m1 0h1m2 0h1m2 0h5m1 0h2M0 25.5h1m1 0h3m1 0h1m1 0h1m1 0h1m1 0h2m4 0h1m1 0h1m2 0h1m1 0h4M0 26.5h1m1 0h3m1 0h1m1 0h3m1 0h2m1 0h1m3 0h9M0 27.5h1m5 0h1m2 0h2m3 0h3m3 0h1m2 0h1m1 0h1m1 0h1M0 28.5h7m1 0h2m1 0h2m4 0h1m1 0h1m2 0h1m1 0h3"/></svg></div>
+        <div class="qr-cap">
+          <span class="scan">Scannen &amp; selbst testen</span>
+          <b>Stadtsignal öffnen</b>
+          <span class="u">stadtsignal-app.vercel.app</span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -343,15 +359,7 @@
   window.addEventListener('resize', fitPhone);
   window.addEventListener('load', fitPhone);
   document.getElementById('app').addEventListener('load', fitPhone);
-  // Scrollbalken NUR im eingebetteten Prototyp ausblenden (Scrollen bleibt möglich).
-  document.getElementById('app').addEventListener('load', function(){
-    try{
-      var d = this.contentDocument; if(!d) return;
-      var s = d.createElement('style');
-      s.textContent = 'html,body{scrollbar-width:none !important} ::-webkit-scrollbar{width:0 !important;height:0 !important;display:none !important}';
-      d.head.appendChild(s);
-    }catch(e){}
-  });
+  // (Scrollbalken werden direkt in der App ausgeblendet – styles.css.)
   fitPhone();
   requestAnimationFrame(fitPhone);
   setTimeout(fitPhone, 300);
