@@ -89,7 +89,12 @@ function eventEnd(e) {
 }
 // Abgelaufen = bereits beendet. Laufende (gestartet, noch nicht beendet) gelten als aktiv.
 function isExpired(e) { return eventEnd(e) < Date.now(); }
-function activeEvents() { return EVENTS.filter((e) => !isExpired(e)); }
+// Klar fachfremde Themen (spiegelt den Server-Filter) — als zweite Sicherung,
+// damit nirgends (Newsletter, Scanner, Karte, Kalender) Fachfremdes durchkommt.
+function isOffTopic(e) {
+  return /\bgewalt\b|geschlechterverh|vernissage|ausstellung|\blesung\b|\bkonzert\b|gottesdienst|\btheater\b|\byoga\b|achtsamkeit|psychotherap|seelsorge|\bchor\b|\bmusical\b|tanzabend|geschlechtergerecht|\bmigration\b|\bpflege\b|\bsenioren\b/.test((e.title || "").toLowerCase());
+}
+function activeEvents() { return EVENTS.filter((e) => !isExpired(e) && !isOffTopic(e)); }
 
 function scoreInput() {
   return { interests: state.interests, historyTags: aggregateHistoryTags(state.history, EVENTS) };
