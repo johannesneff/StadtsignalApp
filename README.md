@@ -1,85 +1,101 @@
 # Stadtsignal
 
-**Stadtsignal** ist ein KI-Tech-Radar für IT-Events rund um Würzburg: Events
-über einen KI-Agenten in natürlicher Sprache finden, nach Interessen filtern, auf
-einer Karte erkunden, im Kalender planen und als persönlichen Newsletter erhalten.
+**Stadtsignal** ist ein KI-Tech-Radar für IT-Events rund um Würzburg/Mainfranken:
+Events über einen KI-Agenten in natürlicher Sprache finden, nach Interessen
+gewichtet, auf einer Karte erkunden, im Kalender planen, in den eigenen Kalender
+übernehmen und als persönlichen Newsletter per E-Mail erhalten.
 
 Apple-minimalistisches, helles UI. **Hybrid-Architektur:** statisches Frontend
-(kein Build) + eine schlanke Serverless-Funktion für den echten KI-Agenten.
+(kein Build) + schlanke Serverless-Funktionen für Agent, Event-Ingestion und Mailversand.
 
 ## Bereiche (Bottom-Navigation)
 
-- **Übersicht** – Umschalter zwischen **Karte** (Leaflet-Heatmap, Kategorie-Marker, Zeitraum-Regler) und **Kalender** (Monatsraster mit Event-Punkten, Tagesdetail).
-- **Scanner** (mittig) – KI-Agent: Frage in natürlicher Sprache → Smart-Thinking + Treffer. Dazu Empfehlung des Tages und Top 3 der nächsten 14 Tage (lokales Scoring, ohne KI-Kosten).
-- **Einstellungen** – Anzeigename, 12 farbcodierte Interessen, Newsletter (Vorschau + `mailto:`-Versand) und **Historie** (Besucht / Notizen).
+- **Übersicht** – Umschalter zwischen **Karte** (Leaflet, Tag-Stepper mit Dichte-Heatmap, Kategorie-Marker) und **Kalender** (Monatsraster, Tagesdetail). Events lassen sich per Klick in den eigenen Kalender exportieren (`.ics`).
+- **Scanner** (mittig) – der **KI-Agent**: Frage in natürlicher Sprache → Smart-Thinking, geprüfte Treffer mit „weil …"-Begründung und Web-Funden. Dazu Empfehlung des Tages und Top 3 (lokales Scoring, ohne KI-Kosten). Zeit/Tag/Modus/Level/Format leitet der Agent aus der Frage ab; Interessen, Ort, Fokus und Suchverlauf fließen als Signale ein.
+- **Einstellungen** – Anzeigename (erscheint personalisiert im Scanner), 12 Interessen, Präferenzen (Fokus + Ort), Newsletter (echte Mail), Historie (Besucht/Notizen) und ein **Demo-Profil** für Präsentationen.
 
-Profil, Interessen, Historie und Notizen liegen im `localStorage`.
+Profil, Interessen, Präferenzen, Suchverlauf, Historie und Notizen liegen im `localStorage` (gerätelokal, keine Accounts).
 
 ## Echte Event-Quellen ([api/events.js](api/events.js))
 
-Angebunden (live, cache 6 h, abgelaufene Events werden anhand der aktuellen Zeit ausgefiltert; laufende bleiben):
+Angebunden (live, Cache 6 h, abgelaufene Events werden anhand der aktuellen Zeit ausgefiltert; laufende bleiben):
 
 - **Meetup** (iCal) – Würzburger Tech-Gruppen
 - **AI Week Mainfranken** (Timetable-JSON, mit Koordinaten)
 - **FRIZZ Würzburg** (iCal, auf Tech gefiltert)
 - **Uni Würzburg** (Veranstaltungs-RSS, auf Tech gefiltert)
 
-Quellen ohne abrufbaren Feed (ZDI, THWS, IHK, Stadt Würzburg, Gründerzentren, Eventbrite) deckt der **Agent per Websuche** ab (Google-Search-Grounding) und listet Funde im Abschnitt „🌐 Weitere Funde" mit Link.
+Jedes Event wird angereichert: **Dubletten** aus mehreren Quellen werden zusammengeführt,
+**exakte Position** via OpenStreetMap/Nominatim (gecached), **Link-Check** (eindeutig tote
+Links → Suchlink; sonst Originallink erhalten, „✓ Link geprüft" nur bei echter Erreichbarkeit)
+und ein **Event-Bild** (`og:image` der Seite, sonst Themen-Fallback).
+
+Quellen ohne abrufbaren Feed (ZDI, THWS, IHK, Stadt Würzburg, Gründerzentren, Eventbrite)
+deckt der **Agent per Websuche** ab (Google-Search-Grounding); diese Funde werden
+serverseitig auf Erreichbarkeit geprüft, bevor sie angezeigt werden.
 
 ## KI-Agent (kostenlos)
 
-- Modell: **Google Gemini** (`gemini-2.5-flash`, kostenloser AI-Studio Free-Tier) über die Serverless-Funktion [`api/agent.js`](api/agent.js) – per REST/`fetch`, **ohne SDK**.
-- Sparmaßnahmen: schnelles „flash"-Modell, kleines `maxOutputTokens`, nur die aktuelle Frage wird gesendet, und der Agent wird **nur bei aktiver Nutzer-Anfrage** aufgerufen (Empfehlungen laufen lokal).
-- **Fallback:** Ohne `GEMINI_API_KEY` (oder lokal ohne Funktions-Server) fällt der Scanner automatisch auf die lokale Scoring-Empfehlung zurück – die App funktioniert also überall.
+- Modell: **Google Gemini** (`gemini-2.5-flash`, kostenloser AI-Studio Free-Tier) über [`api/agent.js`](api/agent.js) – per REST/`fetch`, **ohne SDK**.
+- Sparsam: schnelles „flash"-Modell, kleines `maxOutputTokens`, nur die aktuelle Frage; der Agent wird **nur bei aktiver Nutzer-Anfrage** aufgerufen (Empfehlungen laufen lokal).
+- **Fallback:** Ohne `GEMINI_API_KEY` (oder lokal ohne Funktions-Server) nutzt der Scanner die lokale Scoring-Empfehlung – die App funktioniert überall, der Modus wird sichtbar als „Lokal" markiert.
 - Modell per `GEMINI_MODEL` umstellbar (z. B. `gemini-2.5-flash-lite`).
+
+## Newsletter ([api/send-newsletter.js](api/send-newsletter.js))
+
+- „An mich senden" verschickt eine **echte HTML-Mail** an die hinterlegte Adresse über **[Resend](https://resend.com)** – gleiches Layout wie die Vorschau, mit echten Event-Bildern. Es öffnet **keine** Mail-App mehr.
+- Benötigt `RESEND_API_KEY`. Ohne eigene verifizierte Domain sendet der Test-Absender nur an die **eigene Resend-Konto-Adresse**.
+- Auto-Versand-Schalter + Rhythmus speichern die Einstellung; echter wiederkehrender Versand (Cron + Abonnenten-Speicher) ist Roadmap.
 
 ## Technik
 
-- Frontend: HTML/CSS/JavaScript als **ES-Module**, kein Build.
+- Frontend: HTML/CSS/JavaScript als **klassische `<script>`-Tags** (kein Build, per Doppelklick auf `index.html` via `file://` öffenbar).
 - Karte/Heatmap: [Leaflet](https://leafletjs.com/) + `leaflet.heat` (CDN), helle CARTO-Kacheln (kein API-Key).
-- Agent: [`@anthropic-ai/sdk`](https://www.npmjs.com/package/@anthropic-ai/sdk) in einer Vercel-Node-Funktion.
-- `data.js` ist die einzige Datenquelle – wird von Browser **und** Funktion importiert.
+- Serverless-Funktionen (`api/*.js`): reines `fetch`, **keine npm-Abhängigkeiten**.
 
 ## Projektstruktur
 
 ```
-index.html     – Grundgerüst, CDN-Einbindungen, lädt app.js als Modul
-styles.css     – Design-System (Apple-minimal, Kategorie-Farben)
-data.js        – Kategorien/Interessen + Würzburger Event-Seed (Browser + Node)
-scoring.js     – lokales Scoring (Fallback ohne KI-Key)
-app.js         – Bereiche, Navigation, Karte, Kalender, Scanner, Newsletter, State
-api/agent.js   – Serverless-Funktion: Claude-Haiku-Agent (Streaming-frei, gecacht)
-package.json   – nur die Funktions-Abhängigkeit (@anthropic-ai/sdk)
-vercel.json    – Funktions-Konfiguration (maxDuration)
-.env.example   – Vorlage für ANTHROPIC_API_KEY
+index.html             – Grundgerüst, CDN-Einbindungen, lädt die klassischen Scripts
+styles.css             – Design-System (Apple-minimal, Kategorie-Farben)
+data.js                – Kategorien/Interessen + Würzburger Event-Seed (Fallback)
+scoring.js             – lokales Scoring (Fallback ohne KI-Key)
+app.js                 – Bereiche, Navigation, Karte, Kalender, Scanner, Newsletter, State
+api/events.js          – Event-Ingestion: Feeds, Dedupe, Geocoding, Link-Check, Bilder
+api/agent.js           – Gemini-Agent (REST), Web-Grounding + Link-Verifikation
+api/send-newsletter.js – echter Mailversand via Resend
+dev-server.mjs         – lokaler Dev-Server (statisch + /api-Routing)
+package.json           – type:module, keine Abhängigkeiten
+vercel.json            – Funktions-Konfiguration (maxDuration)
+.env.example           – Vorlage für GEMINI_API_KEY und RESEND_API_KEY
 ```
 
 ## Lokal starten
 
-Frontend (Agent fällt mangels Funktions-Server auf die lokale Empfehlung zurück):
+Nur Frontend (Agent + Newsletter fallen mangels Funktions-Server zurück):
 
 ```bash
 python3 -m http.server 4321
-# dann http://127.0.0.1:4321 öffnen
+# dann http://127.0.0.1:4321 öffnen  – oder index.html direkt doppelklicken
 ```
 
-Mit echtem Agent lokal (benötigt Node, kein Vercel-Konto):
+Mit echten Funktionen lokal (benötigt Node, kein Vercel-Konto):
 
 ```bash
-npm install
-echo "GEMINI_API_KEY=..." > .env   # Key: https://aistudio.google.com/apikey
-npm run dev                          # http://localhost:5173
+echo "GEMINI_API_KEY=..." > .env      # https://aistudio.google.com/apikey
+echo "RESEND_API_KEY=..." >> .env      # optional, https://resend.com/api-keys
+npm run dev                             # http://localhost:5173
 ```
 
 ## Deployment (Vercel)
 
-1. Repo zu GitHub pushen und in Vercel importieren **oder** `vercel` per CLI ausführen.
-2. Kein Build nötig (Framework: „Other"); statische Dateien + `api/` werden automatisch erkannt.
-3. In **Project Settings → Environment Variables** `GEMINI_API_KEY` setzen.
-4. Deployen – fertig. Ohne Key läuft die App weiter, nur der Scanner nutzt dann den lokalen Fallback.
+1. Repo zu GitHub pushen und in Vercel importieren (Framework: „Other", kein Build).
+2. In **Project Settings → Environment Variables** `GEMINI_API_KEY` und `RESEND_API_KEY` setzen.
+3. Zuerst als **Preview** deployen, kurz testen (Events laden · Agent antwortet · Mail an dich selbst), dann auf Production promoten.
+4. Ohne Keys läuft die App weiter – Scanner nutzt den lokalen Fallback, der Newsletter zeigt einen Hinweis.
 
-## Nächste Schritte
+## Demo-Profil
 
-Echte Live-Datenquellen (Meetup, FHWS/JMU, ZDI, Heise, IHK), echter
-Newsletter-Versand mit HTML, Standort-Hinweise (Geolocation) und Streaming der
-Agenten-Antwort.
+`?demo=1` an die URL hängen **oder** in den Einstellungen „Demo-Profil laden": füllt
+Interessen, Fokus, „Besucht" und Suchverlauf, damit die Personalisierung sofort
+sichtbar ist. „Zurücksetzen" löscht alle lokalen Daten.

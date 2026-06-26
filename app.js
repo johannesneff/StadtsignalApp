@@ -19,9 +19,13 @@ const defaultState = {
   name: "",
   email: "",
   rhythm: "weekly",
+  autoSend: false,
   locationHints: false,
-  // Lokale Präferenzen (fließen in den Agenten ein, kein Datenschutzrisiko)
-  prefs: { days: "any", daytime: "any", mode: "any", level: "any", formats: [], focus: "", area: "" },
+  // Zuletzt gesuchte Anfragen (lokal, fließen als Signal in den Agenten ein).
+  searchHistory: [],
+  // Stabile Präferenzen: Fokus/Ziele + bevorzugter Ort. Zeit/Tag/Modus/Level/Format
+  // werden NICHT mehr per Formular abgefragt, sondern vom Agenten aus der Anfrage abgeleitet.
+  prefs: { focus: "", area: "" },
 };
 function loadState() {
   try {
@@ -121,6 +125,7 @@ const I = {
   radio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="24" height="24"><circle cx="12" cy="12" r="2"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4M5 19a10 10 0 0 1 0-14M19 5a10 10 0 0 1 0 14"/></svg>',
   send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>',
   eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
+  calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>',
   person: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
   refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg>',
 };
@@ -157,6 +162,23 @@ function eventRow(ev, onClick) {
 }
 
 // Treffer-Karte mit Match-Score, Karten-Sprung und Link zur Eventseite.
+// Ehrliches Link-Label: ein bei totem Link ersetzter Suchlink heißt „Event suchen".
+function linkLabel(ev) { return ev.linkIsSearch ? "Event suchen →" : "Zur Eventseite →"; }
+// Trust-Zeile: „✓ Link geprüft" nur, wenn der Server die Seite wirklich erreicht hat.
+function trustLine(ev) {
+  const src = ev.source || "";
+  if (ev.linkVerified) return h("div", { class: "trust-line" }, h("span", { class: "verified" }, "✓ Link geprüft"), src ? "· " + src : null);
+  if (src) return h("div", { class: "trust-line" }, h("span", { class: "muted" }, "Quelle: " + src));
+  return null;
+}
+// Frische-Stempel: nur bei echten (live geladenen) Events.
+function freshnessLine() {
+  if (!EVENTS_META.live) return null;
+  const t = EVENTS_META.fetchedAt ? new Date(EVENTS_META.fetchedAt) : new Date();
+  const n = (EVENTS_META.sources || []).length;
+  return h("div", { class: "freshness" }, `✓ ${EVENTS_META.count} echte Events aus ${n} Quelle${n === 1 ? "" : "n"} · Stand ${pad(t.getHours())}:${pad(t.getMinutes())} Uhr`);
+}
+
 function recoItem(ev, score, extraMeta) {
   const meta = categoryLabel(ev.category) + " · " + fmtDateTime(ev.startsAt) + (extraMeta ? " · " + extraMeta : "");
   return h("div", { class: "reco-item" },
@@ -165,8 +187,10 @@ function recoItem(ev, score, extraMeta) {
       h("div", { class: "meta" }, meta),
       h("div", { class: "reco-actions" },
         h("button", { class: "reco-link", onclick: () => goToMap(ev.id) }, "Auf der Karte"),
-        h("a", { class: "reco-link", href: ev.url, target: "_blank", rel: "noopener" }, "Zur Eventseite →"),
+        h("button", { class: "reco-link", onclick: () => downloadIcs(ev) }, "In Kalender"),
+        h("a", { class: "reco-link", href: ev.url, target: "_blank", rel: "noopener" }, linkLabel(ev)),
       ),
+      trustLine(ev),
     ),
     h("span", { class: "match" }, Math.round(score * 100) + "%"),
   );
@@ -216,6 +240,7 @@ function renderScanner() {
     h("h2", { class: "section-title", id: "scannerGreeting", style: { margin: "8px 0 16px" } }, greeting()),
     h("div", { class: "search-wrap" }, input, goBtn),
     h("div", { style: { marginTop: "14px" } }, sugRow),
+    freshnessLine(),
     thinking, results,
   ));
 
@@ -233,8 +258,9 @@ function renderScanner() {
       h("p", { class: "reason" }, top.reasons.join(" · ")),
       h("div", { style: { display: "flex", gap: "10px", marginTop: "16px", flexWrap: "wrap" } },
         h("button", { class: "btn primary", onclick: () => goToMap(ev.id) }, "Auf der Karte zeigen"),
+        h("button", { class: "btn", onclick: () => downloadIcs(ev) }, h("span", { html: I.calendar }), "In Kalender"),
         h("button", { class: "btn", onclick: () => toggleVisited(ev.id) }, isVisited(ev.id) ? "✓ Besucht" : "Als besucht markieren"),
-        h("a", { class: "btn", href: ev.url, target: "_blank", rel: "noopener" }, "Zur Eventseite")),
+        h("a", { class: "btn", href: ev.url, target: "_blank", rel: "noopener" }, ev.linkIsSearch ? "Event suchen" : "Zur Eventseite")),
     ));
   }
 
@@ -250,9 +276,18 @@ function renderScanner() {
   root.appendChild(body);
 }
 
+// Suchanfrage lokal merken (jüngste zuerst, ohne Duplikate, max. 10).
+function recordSearch(query) {
+  const q = (query || "").trim();
+  if (!q) return;
+  state.searchHistory = [q, ...state.searchHistory.filter((x) => x.toLowerCase() !== q.toLowerCase())].slice(0, 10);
+  save();
+}
+
 async function runScannerSearch(query, thinkingEl, resultsEl, goBtn) {
   query = (query || "").trim();
   if (!query) return;
+  recordSearch(query);
   clear(thinkingEl); clear(resultsEl);
   if (goBtn) goBtn.disabled = true;
 
@@ -282,6 +317,7 @@ async function runScannerSearch(query, thinkingEl, resultsEl, goBtn) {
         interestLabels: state.interests.map((i) => (INTEREST_BY_ID[i] || {}).label || i),
         prefs: prefsForAgent(),
         history: state.history,
+        recentSearches: state.searchHistory.slice(0, 5),
         events: activeEvents().map((e) => ({ id: e.id, title: e.title, category: e.category, tags: e.tags, startsAt: e.startsAt, endsAt: e.endsAt || null, location: e.location, description: e.description })),
       }),
     });
@@ -350,7 +386,9 @@ function recoCard(ev, match, reason) {
       reason ? h("div", { class: "reco-reason" }, reason) : null,
       h("div", { class: "reco-actions" },
         h("button", { class: "reco-link", onclick: () => goToMap(ev.id) }, "Auf der Karte"),
-        h("a", { class: "reco-link", href: ev.url, target: "_blank", rel: "noopener" }, "Zur Eventseite →"))),
+        h("button", { class: "reco-link", onclick: () => downloadIcs(ev) }, "In Kalender"),
+        h("a", { class: "reco-link", href: ev.url, target: "_blank", rel: "noopener" }, linkLabel(ev))),
+      trustLine(ev)),
     h("span", { class: "match" }, pct + "%"));
 }
 
@@ -576,6 +614,39 @@ function refreshMapData() {
   }
   updateDayUI();
 }
+// --- Kalender-Export (.ics) ---
+// UTC-Stempel (eindeutig, egal ob die Quelle Wandzeit oder Z liefert).
+function icsStamp(d) {
+  return d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate()) + "T" +
+    pad(d.getUTCHours()) + pad(d.getUTCMinutes()) + pad(d.getUTCSeconds()) + "Z";
+}
+function downloadIcs(evOrId) {
+  const ev = (typeof evOrId === "string") ? EVENTS.find((e) => e.id === evOrId) : evOrId;
+  if (!ev) return;
+  const start = new Date(ev.startsAt);
+  const end = ev.endsAt ? new Date(ev.endsAt) : new Date(start.getTime() + 2 * 60 * 60 * 1000);
+  const e = (s) => String(s || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+  const lines = [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Stadtsignal//Wuerzburg//DE", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
+    "BEGIN:VEVENT",
+    "UID:" + (ev.id || "event") + "@stadtsignal",
+    "DTSTAMP:" + icsStamp(new Date()),
+    "DTSTART:" + icsStamp(start),
+    "DTEND:" + icsStamp(end),
+    "SUMMARY:" + e(ev.title),
+    "DESCRIPTION:" + e((ev.description ? ev.description + "\n\n" : "") + (ev.url || "")),
+    "LOCATION:" + e(ev.location || "Würzburg"),
+    ev.url ? "URL:" + e(ev.url) : null,
+    "END:VEVENT", "END:VCALENDAR",
+  ].filter(Boolean);
+  const blob = new Blob([lines.join("\r\n")], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = h("a", { href: url, download: (slug(ev.title) || "event") + ".ics" });
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
+}
+function slug(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40); }
+
 function popupHtml(ev) {
   const visited = isVisited(ev.id);
   return `<div class="popup">
@@ -584,8 +655,11 @@ function popupHtml(ev) {
     <div class="popup-meta">${esc(ev.location)}</div>
     <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn" style="padding:7px 14px;min-height:34px;font-size:13px" data-visit="${ev.id}">${visited ? "✓ Besucht" : "Merken"}</button>
-      <a class="btn" style="padding:7px 14px;min-height:34px;font-size:13px" href="${esc(ev.url)}" target="_blank" rel="noopener">Zur Eventseite</a>
-    </div></div>`;
+      <button class="btn" style="padding:7px 14px;min-height:34px;font-size:13px" data-ics="${ev.id}">In Kalender</button>
+      <a class="btn" style="padding:7px 14px;min-height:34px;font-size:13px" href="${esc(ev.url)}" target="_blank" rel="noopener">${ev.linkIsSearch ? "Event suchen" : "Zur Eventseite"}</a>
+    </div>
+    ${ev.linkVerified ? '<div style="margin-top:8px;font-size:11.5px;color:#1c7a3d;font-weight:700">✓ Link geprüft</div>' : ""}
+    </div>`;
 }
 function goToMap(id) {
   overviewTab = "karte";
@@ -705,6 +779,9 @@ function renderEinstellungen() {
 
   // Historie (Besucht / Notizen)
   body.appendChild(buildHistorie());
+
+  // Demo & Test (Beispiel-Profil / Zurücksetzen)
+  body.appendChild(buildDemoTools());
   root.appendChild(body);
 }
 
@@ -716,15 +793,26 @@ function buildNewsletter() {
       h("button", { "aria-pressed": state.rhythm === v, onclick: () => { state.rhythm = v; save(); renderEinstellungen(); } }, l)));
   const matching = EVENTS.filter((e) => e.tags.some((t) => state.interests.includes(t)));
   const perWeek = Math.max(1, Math.round(matching.length / 2));
+
+  // Auto-Versand-Schalter (speichert die Einstellung; echter wiederkehrender
+  // Versand braucht ein Backend mit Abonnenten-Speicher + Cron -> Roadmap).
+  const autoInput = h("input", { type: "checkbox", onchange: (e) => { state.autoSend = e.target.checked; save(); renderEinstellungen(); } });
+  autoInput.checked = !!state.autoSend;
+
   return h("div", { class: "card" },
     h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "16px" } },
       h("h2", { class: "section-title" }, "Newsletter"), h("span", { class: "muted" }, "ca. " + perWeek + " Events/Woche")),
     h("div", { class: "field", style: { marginBottom: "16px" } }, h("label", {}, "E-MAIL"), emailInput),
-    h("div", { class: "field", style: { marginBottom: "18px" } }, h("label", {}, "RHYTHMUS"), seg),
+    h("div", { class: "field", style: { marginBottom: "16px" } }, h("label", {}, "RHYTHMUS"), seg),
+    h("div", { class: "toggle-row", style: { marginBottom: state.autoSend ? "6px" : "18px" } },
+      h("div", {}, h("div", { style: { fontWeight: "600" } }, "Automatisch senden"),
+        h("div", { class: "muted small", style: { marginTop: "3px" } }, "Schickt den Radar im gewählten Rhythmus von selbst.")),
+      h("label", { class: "switch" }, autoInput, h("span", { class: "slider" }))),
+    state.autoSend ? h("div", { class: "muted small", style: { marginBottom: "18px" } }, "Hinweis: Automatischer Versand wird beim Deployment mit Cron aktiv – die Einstellung ist gespeichert.") : null,
     h("div", { style: { display: "flex", gap: "10px", flexWrap: "wrap" } },
       h("button", { class: "btn", onclick: openNewsletterPreview }, h("span", { html: I.eye }), "Vorschau"),
       h("button", { class: "btn primary", onclick: sendNewsletter }, h("span", { html: I.send }), "An mich senden")),
-    h("div", { class: "muted small", style: { marginTop: "10px" } }, "Öffnet deine Mail-App mit fertigem Entwurf."));
+    h("div", { class: "muted small", style: { marginTop: "10px" } }, "„An mich senden“ verschickt jetzt eine echte E-Mail an die hinterlegte Adresse (gleiches Layout wie die Vorschau)."));
 }
 
 function prefField(label, control) {
@@ -740,22 +828,9 @@ function segChoice(value, options, onPick) {
 }
 function buildPrefs() {
   const p = state.prefs;
-  const set = (k, v) => { p[k] = v; save(); renderEinstellungen(); };
-  const card = h("div", { class: "card" }, h("h2", { class: "section-title", style: { marginBottom: "14px" } }, "Präferenzen"));
-
-  card.appendChild(prefField("TAGE", segChoice(p.days, [["any", "Egal"], ["weekday", "Werktags"], ["weekend", "Wochenende"]], (v) => set("days", v))));
-  card.appendChild(prefField("TAGESZEIT", segChoice(p.daytime, [["any", "Egal"], ["morning", "Vormittags"], ["afternoon", "Nachmittags"], ["evening", "Abends"]], (v) => set("daytime", v))));
-  card.appendChild(prefField("MODUS", segChoice(p.mode, [["any", "Egal"], ["online", "Online"], ["inperson", "Vor Ort"]], (v) => set("mode", v))));
-  card.appendChild(prefField("LEVEL", segChoice(p.level, [["any", "Egal"], ["beginner", "Einsteiger"], ["advanced", "Fortgeschritten"]], (v) => set("level", v))));
-
-  const FORMATS = [["workshop", "Workshop"], ["talk", "Talk"], ["networking", "Networking"], ["conference", "Konferenz"]];
-  const fmtRow = h("div", { class: "chip-row" }, FORMATS.map(([v, l]) => {
-    const active = p.formats.includes(v);
-    return h("button", { class: "chip", "aria-pressed": active ? "true" : "false",
-      style: active ? { background: hexA("#0a84ff", 0.14), color: "#0a84ff" } : {},
-      onclick: () => { const i = p.formats.indexOf(v); if (i >= 0) p.formats.splice(i, 1); else p.formats.push(v); save(); renderEinstellungen(); } }, l);
-  }));
-  card.appendChild(prefField("FORMAT", fmtRow));
+  const card = h("div", { class: "card" }, h("h2", { class: "section-title", style: { marginBottom: "6px" } }, "Präferenzen"));
+  card.appendChild(h("div", { class: "muted small", style: { marginBottom: "16px" } },
+    "Zeit, Tag, Online/Vor Ort, Level & Format erkennt der Agent automatisch aus deiner Frage – z. B. „Einsteiger-Workshop heute Abend vor Ort“. Hier hinterlegst du nur, was dauerhaft gilt:"));
 
   const focus = h("textarea", { class: "input", rows: "2", placeholder: 'z. B. „lerne gerade Rust", „suche Co-Founder", „Einstieg in MLOps" …',
     oninput: (e) => { p.focus = e.target.value; save(); } });
@@ -769,20 +844,13 @@ function buildPrefs() {
   return card;
 }
 
-// Präferenzen für den Agenten in lesbare Form bringen.
+// Stabile Präferenzen für den Agenten. Zeit/Tag/Modus/Level/Format kommen NICHT
+// mehr hierher – die leitet der Agent aus der natürlichsprachlichen Anfrage ab.
 function prefsForAgent() {
   const p = state.prefs;
-  const m = {
-    days: { weekday: "Werktags", weekend: "Wochenende" },
-    daytime: { morning: "Vormittags", afternoon: "Nachmittags", evening: "Abends" },
-    mode: { online: "Online", inperson: "Vor Ort" },
-    level: { beginner: "Einsteiger", advanced: "Fortgeschritten" },
-    formats: { workshop: "Workshop", talk: "Talk", networking: "Networking", conference: "Konferenz" },
-  };
   return {
-    days: m.days[p.days] || "", daytime: m.daytime[p.daytime] || "", mode: m.mode[p.mode] || "",
-    level: m.level[p.level] || "", formats: (p.formats || []).map((f) => m.formats[f] || f),
-    focus: (p.focus || "").slice(0, 300), area: (p.area || "").slice(0, 80),
+    focus: (p.focus || "").slice(0, 300),
+    area: (p.area || "").slice(0, 80),
   };
 }
 
@@ -846,7 +914,15 @@ function digestEvents() {
   const ranked = scoreAndRank(activeEvents(), scoreInput());
   return ranked.filter((r) => r.event.tags.some((t) => state.interests.includes(t))).slice(0, 4);
 }
-function thumbUrl(ev) { return `https://picsum.photos/seed/${ev.id}stadtsignal/200/200`; }
+// Echtes Event-Bild (vom Server angereichert: og:image oder Themen-Fallback).
+// Für Seed-Events ohne Bildfeld: Themen-Fallback nach Kategorie.
+const CATEGORY_IMG = {
+  ai: "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=600&q=70",
+  dev: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&q=70",
+  data: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&q=70",
+  security: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=600&q=70",
+};
+function thumbUrl(ev) { return ev.image || CATEGORY_IMG[ev.category] || CATEGORY_IMG.dev; }
 
 function openNewsletterPreview() {
   const items = digestEvents();
@@ -886,21 +962,45 @@ function openNewsletterPreview() {
   root.appendChild(modal);
   document.addEventListener("keydown", function onEsc(e) { if (e.key === "Escape") { close(); document.removeEventListener("keydown", onEsc); } });
 }
-function sendNewsletter() {
+// Kurzer, nicht-blockierender Hinweis (statt alert/mailto).
+function toast(msg, kind) {
+  const t = h("div", { class: "toast " + (kind || "info") }, msg);
+  document.body.appendChild(t);
+  requestAnimationFrame(() => t.classList.add("show"));
+  setTimeout(() => { t.classList.remove("show"); setTimeout(() => t.remove(), 300); }, 3600);
+}
+
+// Echte HTML-Mail an die hinterlegte Adresse senden (Serverless-Funktion + Resend).
+// Öffnet NICHT mehr die Mail-App; bei fehlendem Endpoint/Key kommt ein Hinweis.
+async function sendNewsletter() {
   const items = digestEvents();
   const to = state.email.trim();
-  if (!to) { go("einstellungen"); alert("Bitte zuerst eine E-Mail-Adresse hinterlegen."); return; }
+  if (!to) { go("einstellungen"); toast("Bitte zuerst eine E-Mail-Adresse hinterlegen.", "warn"); return; }
   const now = new Date();
-  const name = state.name.trim() || "Tech-Fan";
-  const subject = `Stadtsignal · KW ${isoWeek(now)} · dein Würzburger Tech-Radar`;
-  const lines = [
-    `Hallo ${name},`, "", "deine persönliche Event-Auswahl rund um Würzburg:", "",
-    ...items.map((r) => { const ev = r.event; return `• ${ev.title}\n  ${categoryLabel(ev.category)} · ${fmtDateTime(ev.startsAt)}\n  ${ev.location}\n  ${ev.url}`; }),
-    "", `Interessen: ${state.interests.map((i) => INTEREST_BY_ID[i].label).join(", ")}`,
-    `Rhythmus: ${({ daily: "Täglich", weekly: "Wöchentlich", monthly: "Monatlich" })[state.rhythm]}`,
-    "", "— gesendet mit Stadtsignal",
-  ];
-  window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join("\n"))}`;
+  const top = items[0];
+  const payload = {
+    to,
+    name: state.name.trim() || "Tech-Fan",
+    subject: `Stadtsignal · KW ${isoWeek(now)} · dein Würzburger Tech-Radar`,
+    kw: String(isoWeek(now)),
+    dateLabel: pad(now.getDate()) + "." + pad(now.getMonth() + 1) + ".",
+    interests: state.interests.map((i) => INTEREST_BY_ID[i].label),
+    top: top ? { title: top.event.title, match: Math.round(top.score * 100), reason: top.reasons.join(" · ") } : null,
+    events: items.map((r) => {
+      const ev = r.event;
+      return { title: ev.title, category: ev.category, categoryLabel: categoryLabel(ev.category), when: fmtDateTime(ev.startsAt), location: ev.location, url: ev.url, image: thumbUrl(ev) };
+    }),
+  };
+  toast("Sende E-Mail …", "info");
+  try {
+    const r = await fetch("/api/send-newsletter", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d.ok) toast("✓ E-Mail an " + to + " gesendet.", "ok");
+    else if (r.status === 503) toast("Versand nur auf der deployten Seite (RESEND_API_KEY fehlt).", "warn");
+    else toast("Versand fehlgeschlagen: " + (d.error || ("HTTP " + r.status)), "warn");
+  } catch (e) {
+    toast("Kein Versand möglich (lokal/offline ohne Endpoint).", "warn");
+  }
 }
 
 /* ============================================================
@@ -935,6 +1035,7 @@ function buildTabbar() {
 // Echte Events vom Ingestion-Endpunkt laden; ersetzt den Seed in-place.
 // Fällt still auf den kuratierten Seed zurück (offline / file:// / kein Server).
 let lastEventsFetch = 0;
+let EVENTS_META = { live: false, count: 0, sources: [], fetchedAt: null }; // für Frische-Stempel
 // Holt aktuelle Events vom Ingestion-Endpunkt und ersetzt den Seed in-place.
 // Rendert NICHT neu (für den Aufruf mitten in einer laufenden Scanner-Suche).
 async function fetchEvents(force) {
@@ -946,6 +1047,11 @@ async function fetchEvents(force) {
     EVENTS.length = 0;
     for (const e of d.events) EVENTS.push(e);
     lastEventsFetch = Date.now();
+    EVENTS_META = {
+      live: true, count: d.events.length,
+      sources: (d.sources || []).filter((s) => s.ok && s.count).map((s) => s.name),
+      fetchedAt: d.fetchedAt || new Date().toISOString(),
+    };
     return true;
   } catch (e) {
     return false; /* Seed bleibt aktiv */
@@ -963,6 +1069,37 @@ async function loadLiveEvents(force) {
   return ok;
 }
 
+// Demo-/Präsentations-Profil: füllt Interessen, Fokus, Ort, „Besucht" und Suchhistorie,
+// damit die Personalisierung („weil …") sofort sichtbar ist (sonst bei t=0 leer).
+function loadDemoProfile() {
+  const evs = activeEvents();
+  state.name = (state.name && state.name.trim()) ? state.name : "Johannes";
+  state.interests = ["ai", "data", "dev", "startup"];
+  state.prefs.focus = "Einstieg in MLOps, suche Austausch & lokale KI-Community";
+  state.prefs.area = "Innenstadt";
+  state.history = evs.slice(0, 2).map((e) => e.id);   // 2 Events als „besucht"
+  state.searchHistory = ["KI-Workshop für Einsteiger", "Hackathon Würzburg"];
+  save();
+  renderScanner(); renderEinstellungen();
+  if (currentScreen === "uebersicht") renderUebersicht();
+}
+function resetProfile() {
+  try { localStorage.removeItem(LS_KEY); } catch (e) { /* ignore */ }
+  const fresh = JSON.parse(JSON.stringify(defaultState));
+  Object.keys(fresh).forEach((k) => { state[k] = fresh[k]; });
+  save();
+  renderScanner(); renderEinstellungen();
+  if (currentScreen === "uebersicht") renderUebersicht();
+}
+function buildDemoTools() {
+  return h("div", { class: "card" },
+    h("h2", { class: "section-title", style: { marginBottom: "6px" } }, "Demo & Test"),
+    h("div", { class: "muted small", style: { marginBottom: "14px" } }, "Für die Präsentation: ein Beispiel-Profil laden (Interessen, Fokus, Besucht, Suchverlauf) oder alle lokalen Daten zurücksetzen."),
+    h("div", { style: { display: "flex", gap: "10px", flexWrap: "wrap" } },
+      h("button", { class: "btn primary", onclick: loadDemoProfile }, h("span", { html: I.sparkle }), "Demo-Profil laden"),
+      h("button", { class: "btn", onclick: resetProfile }, "Zurücksetzen")));
+}
+
 function init() {
   const mount = $("#screens");
   SCREENS.forEach((s) => { const div = h("div", { class: "screen", id: "screen-" + s.id }); mount.appendChild(div); s.render(); });
@@ -970,11 +1107,14 @@ function init() {
   go(location.hash.slice(1) || "scanner", true);
   window.addEventListener("hashchange", () => go(location.hash.slice(1) || "scanner", true));
   document.addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-visit]");
-    if (btn) { toggleVisited(btn.getAttribute("data-visit")); if (map) map.closePopup(); }
+    const visitBtn = e.target.closest("[data-visit]");
+    if (visitBtn) { toggleVisited(visitBtn.getAttribute("data-visit")); if (map) map.closePopup(); return; }
+    const icsBtn = e.target.closest("[data-ics]");
+    if (icsBtn) { downloadIcs(icsBtn.getAttribute("data-ics")); }
   });
 
-  loadLiveEvents();
+  const wantsDemo = (() => { try { return new URLSearchParams(location.search).get("demo") === "1"; } catch (e) { return false; } })();
+  loadLiveEvents().then(() => { if (wantsDemo) loadDemoProfile(); });
 }
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

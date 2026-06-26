@@ -2,7 +2,7 @@
 // Liefert die statischen Dateien aus UND führt die Vercel-Funktion
 // `api/agent.js` für POST /api/agent aus, damit der echte Agent lokal läuft.
 // Start:  node dev-server.mjs   (oder: npm run dev)
-// Key:    ANTHROPIC_API_KEY in .env oder als Umgebungsvariable.
+// Keys:   GEMINI_API_KEY (Agent) und optional RESEND_API_KEY (Newsletter) in .env.
 // Kein Vercel-Konto nötig.
 
 import http from "node:http";

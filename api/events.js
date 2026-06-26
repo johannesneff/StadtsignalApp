@@ -87,6 +87,7 @@ function tagsFor(text, category) {
   if (/\bgame|gaming|godot|unity/.test(t)) tags.add("gaming");
   return [...tags];
 }
+function knownVenue(loc) { const s = loc || ""; return VENUE_COORDS.some(([re]) => re.test(s)); }
 function geocode(loc, id) {
   const s = loc || "";
   for (const [re, lat, lng] of VENUE_COORDS) if (re.test(s)) return [lat, lng];
@@ -117,7 +118,7 @@ function parseIcal(ics, sourceName) {
     const [lat, lng] = geocode(location, id);
     out.push({
       id, title, description: description || "—", startsAt, endsAt,
-      location: location || "Würzburg", lat, lng,
+      location: location || "Würzburg", lat, lng, geoExact: knownVenue(location),
       category, tags: tagsFor(title + " " + description, category),
       url: url || "https://www.meetup.com/", source: sourceName,
     });
@@ -210,9 +211,9 @@ async function fetchAiWeek() {
         ? [loc.name, loc.streetNo, loc.city].filter(Boolean).join(", ")
         : "Online";
       const id = "aiweek-" + (s.id || slug(title));
-      let lat, lng;
-      if (loc && typeof loc.lat === "number" && typeof loc.lng === "number") { lat = loc.lat; lng = loc.lng; }
-      else { [lat, lng] = geocode(online ? "" : location, id); }
+      let lat, lng, geoExact = false;
+      if (loc && typeof loc.lat === "number" && typeof loc.lng === "number") { lat = loc.lat; lng = loc.lng; geoExact = true; }
+      else { [lat, lng] = geocode(online ? "" : location, id); geoExact = !online && knownVenue(location); }
       const linkVal = s.links && s.links.event ? String(s.links.event) : "";
       const url = /^https?:\/\//i.test(linkVal) ? linkVal : "https://www.ai-week.de/programm.php";
       const channel = (s.channel && s.channel.name) ? s.channel.name : "";
@@ -220,7 +221,7 @@ async function fetchAiWeek() {
       events.push({
         id, title, description: desc || "AI Week Mainfranken", startsAt,
         endsAt: (s.end || "").trim() || null,
-        location: online ? "Online · AI Week" : location, lat, lng,
+        location: online ? "Online · AI Week" : location, lat, lng, geoExact,
         category, tags: tagsFor(`${title} ${desc} ${channel}`, category),
         url, source: AIWEEK_NAME,
       });
@@ -284,6 +285,101 @@ function dedupe(events) {
   return [...byKey.values()];
 }
 
+// ---------- Anreicherung: exakte Position (Nominatim) + Link-Check + og:image ----------
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const GEO_CACHE = new Map();   // Location-Query -> [lat,lng] | null  (überlebt warme Instanz)
+const PAGE_CACHE = new Map();  // URL -> { ok, image }
+// Themen-Fallback-Bilder (frei nutzbar, Unsplash Source), falls die Seite kein og:image hat.
+const CATEGORY_IMG = {
+  ai: "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=600&q=70",
+  dev: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&q=70",
+  data: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&q=70",
+  security: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=600&q=70",
+};
+function fallbackImg(cat) { return CATEGORY_IMG[cat] || CATEGORY_IMG.dev; }
+
+async function nominatim(query) {
+  if (GEO_CACHE.has(query)) return GEO_CACHE.get(query);
+  let result = null;
+  try {
+    const ctrl = new AbortController(); const tm = setTimeout(() => ctrl.abort(), 5000);
+    const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=de&q=" + encodeURIComponent(query),
+      { signal: ctrl.signal, headers: { "user-agent": "StadtsignalBot/1.0 (Tech-Event-Radar Würzburg)" } });
+    clearTimeout(tm);
+    if (r.ok) { const j = await r.json(); if (Array.isArray(j) && j[0] && j[0].lat) result = [parseFloat(j[0].lat), parseFloat(j[0].lon)]; }
+  } catch { /* ignore */ }
+  GEO_CACHE.set(query, result);
+  return result;
+}
+function geoQuery(loc) { return /würzburg/i.test(loc) ? loc + ", Germany" : loc + ", Würzburg, Germany"; }
+
+function extractOgImage(html, baseUrl) {
+  const m = html.match(/<meta[^>]+(?:property|name)=["'](?:og:image(?::secure_url)?|twitter:image)["'][^>]*>/i);
+  if (!m) return null;
+  const c = m[0].match(/content=["']([^"']+)["']/i);
+  if (!c) return null;
+  let img = c[1].trim();
+  if (img.startsWith("//")) img = "https:" + img;
+  else if (img.startsWith("/")) { try { img = new URL(img, baseUrl).href; } catch { /* ignore */ } }
+  return /^https?:\/\//.test(img) ? img : null;
+}
+// status: "ok" (erreichbar) | "dead" (404/5xx/Fehlerseite) | "unknown" (Timeout/DNS).
+async function fetchPage(url) {
+  if (PAGE_CACHE.has(url)) return PAGE_CACHE.get(url);
+  const out = { status: "unknown", image: null };
+  try {
+    const ctrl = new AbortController(); const tm = setTimeout(() => ctrl.abort(), 5000);
+    const r = await fetch(url, { redirect: "follow", signal: ctrl.signal, headers: { "user-agent": "Mozilla/5.0 (compatible; StadtsignalBot/1.0)" } });
+    clearTimeout(tm);
+    if (!r.ok) { out.status = "dead"; }
+    else {
+      const html = await r.text();
+      const bad = /seite (konnte )?nicht gefunden|page not found|fehler 404|error 404|404 not found/.test(html.slice(0, 8000).toLowerCase());
+      out.status = bad ? "dead" : "ok";
+      out.image = extractOgImage(html, r.url || url);
+    }
+  } catch { /* Timeout/DNS -> unknown (Original behalten) */ }
+  PAGE_CACHE.set(url, out);
+  return out;
+}
+// Parallel mit Limit abarbeiten.
+async function mapPool(items, limit, fn) {
+  let i = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) { const idx = i++; await fn(items[idx]); }
+  });
+  await Promise.all(workers);
+}
+// Generische/Fallback-Links nicht als „tot" behandeln (sind bewusst Homepages).
+const GENERIC_URL = /meetup\.com\/?$|ai-week\.de\/programm|uni-wuerzburg\.de\/aktuelles|frizz-wuerzburg\.de\/?$|google\.com\/search/i;
+
+async function enrichEvents(events) {
+  // 1) Exakte Position für unscharfe Adressen (Nominatim, sequenziell, max. 1 req/s, gecached).
+  const fuzzy = events.filter((e) => !e.geoExact && e.location && !/^würzburg$|^online/i.test(e.location));
+  const uniqueLocs = [...new Set(fuzzy.map((e) => e.location.trim()))].slice(0, 15);
+  for (const loc of uniqueLocs) { await nominatim(geoQuery(loc)); await sleep(1100); }
+  for (const e of fuzzy) {
+    const c = GEO_CACHE.get(geoQuery(e.location.trim()));
+    if (c) { e.lat = c[0]; e.lng = c[1]; e.geoExact = true; }
+  }
+  // 2) Link-Check + og:image in EINEM Seitenabruf pro Event (parallel, begrenzt).
+  // fail-open: nur EINDEUTIG tote Links (status "dead") durch Suchlink ersetzen.
+  // Timeout/DNS ("unknown") -> Originallink behalten, aber nicht als „geprüft" markieren.
+  await mapPool(events, 6, async (e) => {
+    const checkable = e.url && !GENERIC_URL.test(e.url);
+    const page = checkable ? await fetchPage(e.url) : { status: "skip", image: null };
+    if (page.status === "dead") {
+      e.url = "https://www.google.com/search?q=" + encodeURIComponent(e.title + " Würzburg");
+      e.linkVerified = false; e.linkIsSearch = true;
+    } else {
+      e.linkVerified = page.status === "ok"; // nur bei echter Erreichbarkeit
+      e.linkIsSearch = false;
+    }
+    e.image = page.image || fallbackImg(e.category);
+  });
+  return events;
+}
+
 export default async function handler(req, res) {
   const now = Date.now();
   if (CACHE.data && now - CACHE.at < TTL && !(req.query && req.query.refresh)) {
@@ -308,6 +404,9 @@ export default async function handler(req, res) {
   };
   events = dedupe(events.filter(notEnded))
     .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
+
+  // Anreicherung best-effort: exakte Pins, geprüfte Links, Event-Bilder.
+  try { await enrichEvents(events); } catch { /* Basis-Events bleiben nutzbar */ }
 
   const data = {
     events,

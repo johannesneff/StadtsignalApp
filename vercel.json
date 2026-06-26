@@ -1,6 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "api/agent.js": { "maxDuration": 15 }
+    "api/agent.js": { "maxDuration": 30 },
+    "api/events.js": { "maxDuration": 60 },
+    "api/send-newsletter.js": { "maxDuration": 30 }
   }
 }

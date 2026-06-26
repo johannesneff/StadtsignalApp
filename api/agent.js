@@ -37,7 +37,9 @@ ANTWORTE IMMER AUF DEUTSCH und IMMER GENAU IN DIESEM FORMAT:
 
 Regeln:
 - Gewichte die AKTIVEN INTERESSEN und die HISTORIE (bereits besuchte Themen) STARK: Events, die dazu passen, bekommen höhere Match-Scores und stehen oben. Ohne aktive Interessen breit empfehlen.
-- Beachte die PRÄFERENZEN: „Modus" (Online/Vor Ort) als harte Vorgabe; „Tage", „Tageszeit", „Level" und „Format" als starke Präferenz; richte die Auswahl zusätzlich am „Fokus/Ziele"-Text aus.
+- LEITE Zeit/Tag/Tageszeit, Modus (Online/Vor Ort), Level (Einsteiger/Fortgeschritten) und Format (Workshop/Talk/Networking/Konferenz) AUS DER ANFRAGE selbst ab (z. B. „Einsteiger-Workshop heute Abend vor Ort") und richte die Auswahl danach. Diese kommen NICHT aus Einstellungen.
+- Nutze als stabile Präferenzen nur „Fokus/Ziele" und „Bevorzugter Ort", sowie die LETZTEN SUCHANFRAGEN als weiches Zusatzsignal für wiederkehrende Interessen.
+- BEGRÜNDUNG („weil …"): Stütze jede Begründung NUR auf TATSÄCHLICH übergebene Signale (genannte Interessen, echte besuchte Event-IDs, letzte Suchanfragen, Wortlaut der Anfrage). Erfinde NIEMALS einen Besuch oder ein Interesse, das nicht übergeben wurde. Sind kaum Signale vorhanden, begründe schlicht über die Anfrage selbst.
 - „📍 Treffer": ausschließlich Events aus dem EVENT-POOL mit deren EXAKTER id.
 - „🌐 Weitere Funde": nur per Websuche verifizierte, reale Events mit Link; KEINE id; nichts erfinden.
 - Berücksichtige den ANGEGEBENEN AKTUELLEN ZEITPUNKT: Schlage KEINE bereits beendeten Events vor; laufende/kommende sind erlaubt; bevorzuge zeitlich passende Treffer („heute", „heute Abend", „diese Woche").
@@ -61,6 +63,48 @@ function buildEventPool(events) {
     .join("\n");
 }
 
+// ---------- Anti-Halluzination: Websuche-Funde real verifizieren ----------
+// Jeder „🌐 Weitere Funde"-Link wird tatsächlich abgerufen. Nur Funde, deren
+// Seite (a) erreichbar ist (2xx) und (b) einen markanten Titel-Token enthält,
+// bleiben stehen. Alles andere wird entfernt -> keine toten/erfundenen Links.
+function extractUrl(line) { const m = line.match(/https?:\/\/[^\s)<>\]]+/); return m ? m[0].replace(/[.,;:]+$/, "") : null; }
+function extractTitle(line) { const m = line.match(/\*\*(.+?)\*\*/); return m ? m[1] : ""; }
+
+// Liefert "dead" (eindeutig tot/404), "ok" (erreichbar) oder "unknown" (Timeout/DNS).
+// WICHTIG: fail-open — nur "dead" wird verworfen. SPA-Seiten ohne Titel im Roh-HTML
+// oder transiente Fehler bleiben erhalten (sonst verschwinden echte Events).
+async function verifyUrl(url) {
+  try {
+    const ctrl = new AbortController();
+    const tm = setTimeout(() => ctrl.abort(), 5000);
+    const r = await fetch(url, { redirect: "follow", signal: ctrl.signal, headers: { "user-agent": "Mozilla/5.0 (compatible; StadtsignalBot/1.0)" } });
+    clearTimeout(tm);
+    if (!r.ok) return "dead"; // 404/410/5xx
+    const html = (await r.text()).toLowerCase();
+    if (/seite (konnte )?nicht gefunden|page not found|fehler 404|error 404|404 not found/.test(html.slice(0, 8000))) return "dead";
+    return "ok";
+  } catch { return "unknown"; } // Timeout/DNS/Abbruch -> behalten (fail-open)
+}
+
+async function filterWebFinds(text) {
+  const lines = text.split("\n");
+  const webStart = lines.findIndex((l) => l.trim().startsWith("🌐"));
+  if (webStart === -1) return text;
+  const checks = [];
+  for (let i = webStart + 1; i < lines.length; i++) {
+    if (!lines[i].trim().startsWith("-")) continue;
+    const url = extractUrl(lines[i]);
+    checks.push(url ? verifyUrl(url).then((status) => ({ i, status })) : Promise.resolve({ i, status: "ok" }));
+  }
+  // Nur eindeutig tote Links entfernen.
+  const drop = new Set((await Promise.all(checks)).filter((r) => r.status === "dead").map((r) => r.i));
+  let kept = lines.filter((_, idx) => !drop.has(idx));
+  // Leeren „🌐"-Abschnitt (kein einziger Fund übrig) komplett entfernen.
+  const ws = kept.findIndex((l) => l.trim().startsWith("🌐"));
+  if (ws !== -1 && !kept.slice(ws + 1).some((l) => l.trim().startsWith("-"))) kept = kept.filter((_, idx) => idx !== ws);
+  return kept.join("\n");
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -82,6 +126,7 @@ export default async function handler(req, res) {
   const query = (body.query || "").toString().slice(0, 500);
   const interestLabels = Array.isArray(body.interestLabels) ? body.interestLabels.slice(0, 12) : [];
   const history = Array.isArray(body.history) ? body.history.slice(0, 30) : [];
+  const recentSearches = Array.isArray(body.recentSearches) ? body.recentSearches.map((s) => String(s).slice(0, 80)).slice(0, 5) : [];
   const events = Array.isArray(body.events) ? body.events.slice(0, 60) : [];
 
   if (!query.trim()) { res.status(400).json({ error: "Leere Anfrage" }); return; }
@@ -89,20 +134,14 @@ export default async function handler(req, res) {
 
   const nowIso = (body.now && typeof body.now === "string") ? body.now : new Date().toISOString();
   const prefs = body.prefs && typeof body.prefs === "object" ? body.prefs : {};
-  const prefBits = [];
-  if (prefs.mode) prefBits.push(`Modus: ${prefs.mode}`);
-  if (prefs.days) prefBits.push(`Tage: ${prefs.days}`);
-  if (prefs.daytime) prefBits.push(`Tageszeit: ${prefs.daytime}`);
-  if (prefs.level) prefBits.push(`Level: ${prefs.level}`);
-  if (Array.isArray(prefs.formats) && prefs.formats.length) prefBits.push(`Format: ${prefs.formats.join(", ")}`);
-  if (prefs.area) prefBits.push(`Bevorzugter Ort: ${prefs.area}`);
 
   const systemText = `${FORMAT}\n\nEVENT-POOL:\n${buildEventPool(events)}`;
   const userMessage =
     `Aktueller Zeitpunkt: ${fmtDe(nowIso)} (Europe/Berlin).\n` +
     `Aktive Interessen: ${interestLabels.join(", ") || "(keine)"}.\n` +
-    (prefBits.length ? `Präferenzen: ${prefBits.join(" · ")}.\n` : "") +
-    (prefs.focus ? `Aktueller Fokus/Ziele: ${prefs.focus}\n` : "") +
+    (prefs.area ? `Bevorzugter Ort: ${prefs.area}\n` : "") +
+    (prefs.focus ? `Fokus/Ziele: ${prefs.focus}\n` : "") +
+    (recentSearches.length ? `Letzte Suchanfragen: ${recentSearches.join(" · ")}\n` : "") +
     `Besuchte Event-IDs: ${history.length ? history.join(", ") : "(keine)"}.\n\n` +
     `Frage: ${query}`;
 
@@ -153,7 +192,11 @@ export default async function handler(req, res) {
       return;
     }
 
-    res.status(200).json({ text, model: MODEL, usage: data?.usageMetadata || null });
+    // Websuche-Funde verifizieren (tote/erfundene Links entfernen), bevor geantwortet wird.
+    let safeText = text;
+    try { safeText = await filterWebFinds(text); } catch { safeText = text; }
+
+    res.status(200).json({ text: safeText, model: MODEL, usage: data?.usageMetadata || null });
   } catch (err) {
     res.status(500).json({ error: err?.message || "Agent-Fehler" });
   }
