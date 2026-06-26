@@ -204,7 +204,7 @@
       <!-- 4 — UX, Design & Usability -->
       <section class="slide">
         <div class="eyebrow"><span class="num">3</span> UX, Design &amp; Usability</div>
-        <h2>Apple-ruhig. Bewusst reduziert.</h2>
+        <h2>Klar. Bewusst reduziert.</h2>
         <div class="cards">
           <div class="card"><div class="k">Visuelle Sprache</div><div class="v">Hell, viel Weißraum, <b>ein</b> Akzent-Blau, System-Schrift. Konsistente Formen, Farben &amp; Typo.</div></div>
           <div class="card"><div class="k">Mobile-first</div><div class="v">Responsive bis 375 px; keine Text-Überschneidungen; Karte mit <b>Tages-Heatmap</b>.</div></div>
@@ -343,6 +343,15 @@
   window.addEventListener('resize', fitPhone);
   window.addEventListener('load', fitPhone);
   document.getElementById('app').addEventListener('load', fitPhone);
+  // Scrollbalken NUR im eingebetteten Prototyp ausblenden (Scrollen bleibt möglich).
+  document.getElementById('app').addEventListener('load', function(){
+    try{
+      var d = this.contentDocument; if(!d) return;
+      var s = d.createElement('style');
+      s.textContent = 'html,body{scrollbar-width:none !important} ::-webkit-scrollbar{width:0 !important;height:0 !important;display:none !important}';
+      d.head.appendChild(s);
+    }catch(e){}
+  });
   fitPhone();
   requestAnimationFrame(fitPhone);
   setTimeout(fitPhone, 300);

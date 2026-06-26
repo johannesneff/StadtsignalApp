@@ -5,7 +5,7 @@ Events über einen KI-Agenten in natürlicher Sprache finden, nach Interessen
 gewichtet, auf einer Karte erkunden, im Kalender planen, in den eigenen Kalender
 übernehmen und als persönlichen Newsletter per E-Mail erhalten.
 
-Apple-minimalistisches, helles UI. **Hybrid-Architektur:** statisches Frontend
+Minimalistisches, helles UI. **Hybrid-Architektur:** statisches Frontend
 (kein Build) + schlanke Serverless-Funktionen für Agent, Event-Ingestion und Mailversand.
 
 ## Bereiche (Bottom-Navigation)
@@ -58,7 +58,7 @@ serverseitig auf Erreichbarkeit geprüft, bevor sie angezeigt werden.
 
 ```
 index.html             – Grundgerüst, CDN-Einbindungen, lädt die klassischen Scripts
-styles.css             – Design-System (Apple-minimal, Kategorie-Farben)
+styles.css             – Design-System (minimal, Kategorie-Farben)
 data.js                – Kategorien/Interessen + Würzburger Event-Seed (Fallback)
 scoring.js             – lokales Scoring (Fallback ohne KI-Key)
 app.js                 – Bereiche, Navigation, Karte, Kalender, Scanner, Newsletter, State
